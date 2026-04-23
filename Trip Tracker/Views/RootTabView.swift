@@ -12,7 +12,7 @@ struct RootTabView: View {
             PlaceholderTab(title: "Map", symbol: "map")
                 .tabItem { Label("Map", systemImage: "map") }
 
-            PlaceholderTab(title: "Timeline", symbol: "clock")
+            TimelineView()
                 .tabItem { Label("Timeline", systemImage: "clock") }
 
             PlaceholderTab(title: "Stats", symbol: "chart.bar")
