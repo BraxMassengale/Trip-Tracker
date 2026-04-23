@@ -7,7 +7,6 @@ struct TripsListView: View {
     @Bindable var vm: TripsViewModel
 
     @State private var showingForm = false
-    @State private var editingTrip: Trip?
     @State private var deleteError: String?
     @State private var showingDeleteError = false
 
@@ -28,11 +27,11 @@ struct TripsListView: View {
                     }
                 }
                 .searchable(text: $vm.searchQuery, prompt: "Search trips")
+                .navigationDestination(for: Trip.self) { trip in
+                    TripDetailView(trip: trip)
+                }
                 .sheet(isPresented: $showingForm) {
                     TripFormView()
-                }
-                .sheet(item: $editingTrip) { trip in
-                    TripFormView(editing: trip)
                 }
                 .alert("Couldn't delete", isPresented: $showingDeleteError) {
                     Button("OK", role: .cancel) {}
@@ -56,12 +55,9 @@ struct TripsListView: View {
                 } else {
                     List {
                         ForEach(filteredTrips) { trip in
-                            Button {
-                                editingTrip = trip
-                            } label: {
+                            NavigationLink(value: trip) {
                                 TripRowView(trip: trip)
                             }
-                            .buttonStyle(.plain)
                         }
                         .onDelete(perform: delete)
                     }
