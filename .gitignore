@@ -1,0 +1,25 @@
+# macOS
+.DS_Store
+
+# Xcode - User-specific
+xcuserdata/
+*.xcuserstate
+*.xcuserdatad/
+
+# Xcode - Build
+build/
+DerivedData/
+*.moved-aside
+
+# Swift Package Manager
+.build/
+.swiftpm/
+Package.resolved
+
+# CocoaPods / Carthage (unused but defensive)
+Pods/
+Carthage/Build/
+
+# xcodegen — the .xcodeproj is generated from project.yml. Commit project.yml,
+# ignore the generated project to keep history clean. Regenerate with `xcodegen`.
+*.xcodeproj/
