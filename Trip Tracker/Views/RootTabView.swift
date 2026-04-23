@@ -2,9 +2,11 @@ import SwiftUI
 import SwiftData
 
 struct RootTabView: View {
+    @State private var tripsViewModel = TripsViewModel()
+
     var body: some View {
         TabView {
-            TripsHarnessTab()
+            TripsListView(vm: tripsViewModel)
                 .tabItem { Label("Trips", systemImage: "suitcase") }
 
             PlaceholderTab(title: "Map", symbol: "map")
@@ -20,57 +22,6 @@ struct RootTabView: View {
                 .tabItem { Label("Settings", systemImage: "gearshape") }
         }
         .tint(AppTheme.ColorToken.accent)
-    }
-}
-
-// Temporary harness so the Trip form can be exercised end-to-end.
-// MEN-158 replaces this with the real TripsListView.
-private struct TripsHarnessTab: View {
-    @Query(sort: \Trip.startDate, order: .reverse) private var trips: [Trip]
-    @State private var showingForm = false
-
-    var body: some View {
-        NavigationStack {
-            Group {
-                if trips.isEmpty {
-                    VStack(spacing: 16) {
-                        Image(systemName: "suitcase")
-                            .font(.system(size: 48, weight: .light))
-                            .foregroundStyle(AppTheme.ColorToken.secondaryInk)
-                        Text("No trips yet")
-                            .font(.headline)
-                            .foregroundStyle(AppTheme.ColorToken.ink)
-                        Text("Tap + to record your first trip.")
-                            .font(.subheadline)
-                            .foregroundStyle(AppTheme.ColorToken.secondaryInk)
-                    }
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                } else {
-                    List(trips) { trip in
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(trip.title)
-                                .foregroundStyle(AppTheme.ColorToken.ink)
-                            Text(trip.destinationName.isEmpty ? "No destination" : trip.destinationName)
-                                .font(.footnote)
-                                .foregroundStyle(AppTheme.ColorToken.secondaryInk)
-                        }
-                    }
-                }
-            }
-            .navigationTitle("Trips")
-            .toolbar {
-                ToolbarItem(placement: .primaryAction) {
-                    Button {
-                        showingForm = true
-                    } label: {
-                        Image(systemName: "plus")
-                    }
-                }
-            }
-            .sheet(isPresented: $showingForm) {
-                TripFormView()
-            }
-        }
     }
 }
 
