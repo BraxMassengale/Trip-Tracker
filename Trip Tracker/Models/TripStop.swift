@@ -104,4 +104,14 @@ struct TripStopSummary: Identifiable {
             .filter { !$0.isEmpty }
             .joined(separator: " · ")
     }
+
+    var location: TripLocation? {
+        guard let latitude, let longitude else { return nil }
+        return TripLocation(
+            latitude: latitude,
+            longitude: longitude,
+            destinationName: destinationName,
+            country: country
+        )
+    }
 }

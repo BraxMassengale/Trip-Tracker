@@ -83,8 +83,27 @@ struct TripsListView: View {
                         Haptics.selection()
                     }
                 }
+
+                ForEach(companionOptions, id: \.self) { companion in
+                    FilterChip(
+                        label: "With: \(companion)",
+                        isSelected: vm.companionFilters.contains(companion)
+                    ) {
+                        if vm.companionFilters.contains(companion) {
+                            vm.companionFilters.remove(companion)
+                        } else {
+                            vm.companionFilters.insert(companion)
+                        }
+                        Haptics.selection()
+                    }
+                }
             }
         }
+    }
+
+    private var companionOptions: [String] {
+        let values = allTrips.flatMap(\.companions)
+        return orderedUnique(values)
     }
 
     private var sortMenu: some View {
@@ -168,6 +187,20 @@ struct TripsListView: View {
         } else {
             Haptics.success()
         }
+    }
+
+    private func orderedUnique(_ values: [String]) -> [String] {
+        var seen: Set<String> = []
+        var result: [String] = []
+
+        for value in values {
+            let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !trimmed.isEmpty else { continue }
+            guard seen.insert(trimmed.lowercased()).inserted else { continue }
+            result.append(trimmed)
+        }
+
+        return result.sorted { $0.localizedCaseInsensitiveCompare($1) == .orderedAscending }
     }
 }
 

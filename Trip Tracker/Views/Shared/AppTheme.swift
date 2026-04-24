@@ -53,6 +53,31 @@ enum AppTheme {
             UIColor(red: 0.75, green: 0.74, blue: 0.72, alpha: 1),
             UIColor(red: 0.22, green: 0.24, blue: 0.26, alpha: 1)
         )
+
+        static let routeBlue = dynamic(
+            UIColor(red: 0.20, green: 0.42, blue: 0.86, alpha: 1),
+            UIColor(red: 0.43, green: 0.63, blue: 0.95, alpha: 1)
+        )
+
+        static let routeViolet = dynamic(
+            UIColor(red: 0.48, green: 0.34, blue: 0.78, alpha: 1),
+            UIColor(red: 0.66, green: 0.55, blue: 0.93, alpha: 1)
+        )
+
+        static let routeRose = dynamic(
+            UIColor(red: 0.75, green: 0.27, blue: 0.42, alpha: 1),
+            UIColor(red: 0.92, green: 0.50, blue: 0.62, alpha: 1)
+        )
+
+        static let routeGold = dynamic(
+            UIColor(red: 0.66, green: 0.46, blue: 0.12, alpha: 1),
+            UIColor(red: 0.90, green: 0.69, blue: 0.30, alpha: 1)
+        )
+
+        static let routeSlate = dynamic(
+            UIColor(red: 0.36, green: 0.43, blue: 0.52, alpha: 1),
+            UIColor(red: 0.58, green: 0.65, blue: 0.73, alpha: 1)
+        )
     }
 
     enum Metric {

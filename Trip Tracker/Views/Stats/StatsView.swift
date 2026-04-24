@@ -14,6 +14,7 @@ struct StatsView: View {
             ScrollView {
                 VStack(spacing: 16) {
                     summaryCard
+                    companionsCard
                     yearlyBreakdownCard
                 }
                 .padding()
@@ -96,6 +97,52 @@ struct StatsView: View {
         }
     }
 
+    private var companionsCard: some View {
+        SectionCard(
+            title: "Most traveled with",
+            subtitle: companionFrequencies.isEmpty
+                ? "Travel partners will appear here as you add them."
+                : "The people showing up across your saved trips."
+        ) {
+            if companionFrequencies.isEmpty {
+                HStack(spacing: 10) {
+                    Image(systemName: "person.2")
+                        .font(.system(size: 28, weight: .light))
+                        .foregroundStyle(AppTheme.ColorToken.secondaryInk)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("No companions yet")
+                            .font(.headline)
+                            .foregroundStyle(AppTheme.ColorToken.ink)
+                        Text("Add travel partners from a trip form.")
+                            .font(.subheadline)
+                            .foregroundStyle(AppTheme.ColorToken.secondaryInk)
+                    }
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+            } else {
+                VStack(spacing: 10) {
+                    ForEach(companionFrequencies.prefix(6), id: \.name) { item in
+                        HStack {
+                            Text(item.name)
+                                .font(.subheadline.weight(.medium))
+                                .foregroundStyle(AppTheme.ColorToken.ink)
+                            Spacer()
+                            Text(item.count == 1 ? "1 trip" : "\(item.count) trips")
+                                .font(.footnote.weight(.medium))
+                                .foregroundStyle(AppTheme.ColorToken.secondaryInk)
+                        }
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 10)
+                        .background(
+                            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                .fill(AppTheme.ColorToken.canvas)
+                        )
+                    }
+                }
+            }
+        }
+    }
+
     private var countryCount: Int {
         Set(trips.flatMap(\.countryValues)).count
     }
@@ -135,6 +182,33 @@ struct StatsView: View {
             .map { (year: $0.key, count: $0.value.count) }
             .sorted { $0.year > $1.year }
     }
+
+    private var companionFrequencies: [(name: String, count: Int)] {
+        var displayNamesByKey: [String: String] = [:]
+        var countsByKey: [String: Int] = [:]
+
+        for trip in trips {
+            let uniqueCompanions = Set(trip.companions.map { $0.lowercased() })
+            for key in uniqueCompanions {
+                guard let displayName = trip.companions.first(where: { $0.lowercased() == key }) else {
+                    continue
+                }
+                displayNamesByKey[key] = displayNamesByKey[key] ?? displayName
+                countsByKey[key, default: 0] += 1
+            }
+        }
+
+        return countsByKey
+            .map { key, count in
+                (name: displayNamesByKey[key] ?? key, count: count)
+            }
+            .sorted {
+                if $0.count == $1.count {
+                    return $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending
+                }
+                return $0.count > $1.count
+            }
+    }
 }
 
 private struct StatTile: View {
@@ -173,6 +247,7 @@ private struct StatTile: View {
             destinationName: "Mexico City",
             country: "Mexico",
             startDate: .now.addingTimeInterval(-60 * 60 * 24 * 40),
+            companions: ["Ana", "Mom"],
             favorite: true
         )
     )
@@ -181,7 +256,8 @@ private struct StatTile: View {
             title: "Berlin Summer",
             destinationName: "Berlin",
             country: "Germany",
-            startDate: .now.addingTimeInterval(-60 * 60 * 24 * 420)
+            startDate: .now.addingTimeInterval(-60 * 60 * 24 * 420),
+            companions: ["Ana"]
         )
     )
 

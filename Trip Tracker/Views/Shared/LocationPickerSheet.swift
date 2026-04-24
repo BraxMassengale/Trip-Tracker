@@ -2,17 +2,6 @@ import SwiftUI
 import MapKit
 import CoreLocation
 
-struct TripLocation: Equatable {
-    var latitude: Double
-    var longitude: Double
-    var destinationName: String
-    var country: String
-
-    var coordinate: CLLocationCoordinate2D {
-        CLLocationCoordinate2D(latitude: latitude, longitude: longitude)
-    }
-}
-
 struct LocationPickerSheet: View {
     @Binding var location: TripLocation?
     @Environment(\.dismiss) private var dismiss

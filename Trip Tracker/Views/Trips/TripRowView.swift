@@ -29,6 +29,13 @@ struct TripRowView: View {
                         .lineLimit(1)
                 }
 
+                if let journeyLabel = trip.journeyEndpointSummary {
+                    Text(journeyLabel)
+                        .font(.caption)
+                        .foregroundStyle(AppTheme.ColorToken.secondaryInk)
+                        .lineLimit(1)
+                }
+
                 Text(dateLabel)
                     .font(.caption)
                     .foregroundStyle(AppTheme.ColorToken.secondaryInk)

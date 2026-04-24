@@ -126,6 +126,16 @@ struct TripDetailView: View {
                     .font(.subheadline)
                     .foregroundStyle(AppTheme.ColorToken.secondaryInk)
 
+                if let journeyEndpointSummary = trip.journeyEndpointSummary {
+                    Label(journeyEndpointSummary, systemImage: "point.topleft.down.curvedto.point.bottomright.up")
+                        .font(.subheadline)
+                        .foregroundStyle(AppTheme.ColorToken.secondaryInk)
+                }
+
+                if !trip.companions.isEmpty {
+                    companionChips
+                }
+
                 Text(trip.stopCountLabel)
                     .font(.footnote.weight(.medium))
                     .foregroundStyle(AppTheme.ColorToken.accent)
@@ -143,6 +153,38 @@ struct TripDetailView: View {
                 }
             }
         }
+    }
+
+    private var companionChips: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 8) {
+                ForEach(trip.companions, id: \.self) { companion in
+                    Label {
+                        Text(companion)
+                    } icon: {
+                        Text(initials(for: companion))
+                            .font(.caption2.weight(.bold))
+                            .foregroundStyle(AppTheme.ColorToken.cardFill)
+                            .frame(width: 22, height: 22)
+                            .background(Circle().fill(AppTheme.ColorToken.accent))
+                    }
+                    .font(.footnote.weight(.medium))
+                    .foregroundStyle(AppTheme.ColorToken.ink)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 6)
+                    .background(Capsule().fill(AppTheme.ColorToken.accentSoft))
+                }
+            }
+        }
+    }
+
+    private func initials(for name: String) -> String {
+        let parts = name
+            .split(separator: " ")
+            .prefix(2)
+            .compactMap(\.first)
+        let value = String(parts).uppercased()
+        return value.isEmpty ? "?" : value
     }
 
     private var tagsCard: some View {
@@ -206,21 +248,21 @@ struct TripDetailView: View {
     }
 
     private var shouldShowTransportChain: Bool {
-        trip.stopSummaries.count > 1
+        trip.journeyLocations.count > 1
     }
 
     private var transportChain: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 8) {
-                ForEach(Array(trip.stopSummaries.enumerated()), id: \.element.id) { index, summary in
-                    if index > 0, let mode = summary.arrivalMode {
+                ForEach(Array(trip.journeyLocations.enumerated()), id: \.element.id) { index, location in
+                    if index > 0, let mode = location.arrivalMode {
                         Image(systemName: mode.symbolName)
                             .font(.footnote.weight(.semibold))
                             .foregroundStyle(AppTheme.ColorToken.accent)
                             .accessibilityLabel(mode.label)
                     }
 
-                    Text(transportChainLabel(for: summary, fallback: "Stop \(index + 1)"))
+                    Text(transportChainLabel(for: location, fallback: "Stop \(index + 1)"))
                         .font(.footnote.weight(.medium))
                         .foregroundStyle(AppTheme.ColorToken.ink)
                         .lineLimit(1)
@@ -237,22 +279,31 @@ struct TripDetailView: View {
         .accessibilityLabel(transportChainAccessibilityLabel)
     }
 
-    private func transportChainLabel(for summary: TripStopSummary, fallback: String) -> String {
-        let destination = summary.destinationName.trimmingCharacters(in: .whitespacesAndNewlines)
-        if !destination.isEmpty {
-            return destination
-        }
+    private func transportChainLabel(for location: TripJourneyLocation, fallback: String) -> String {
+        switch location.kind {
+        case .start:
+            return "Start: \(location.location.shortLabel)"
+        case .end:
+            return trip.returnsToStart
+                ? "Back: \(location.location.shortLabel)"
+                : "End: \(location.location.shortLabel)"
+        case .stop:
+            let destination = location.location.destinationName.trimmingCharacters(in: .whitespacesAndNewlines)
+            if !destination.isEmpty {
+                return destination
+            }
 
-        let country = summary.country.trimmingCharacters(in: .whitespacesAndNewlines)
-        return country.isEmpty ? fallback : country
+            let country = location.location.country.trimmingCharacters(in: .whitespacesAndNewlines)
+            return country.isEmpty ? fallback : country
+        }
     }
 
     private var transportChainAccessibilityLabel: String {
-        trip.stopSummaries
+        trip.journeyLocations
             .enumerated()
-            .map { index, summary in
-                let stopLabel = transportChainLabel(for: summary, fallback: "Stop \(index + 1)")
-                guard index > 0, let mode = summary.arrivalMode else {
+            .map { index, location in
+                let stopLabel = transportChainLabel(for: location, fallback: "Stop \(index + 1)")
+                guard index > 0, let mode = location.arrivalMode else {
                     return stopLabel
                 }
                 return "\(mode.label) to \(stopLabel)"
@@ -262,17 +313,15 @@ struct TripDetailView: View {
 
     @ViewBuilder
     private var mapCard: some View {
-        if !trip.mapStopSummaries.isEmpty {
-            SectionCard(title: "Map", subtitle: "Stops with saved coordinates") {
+        if !trip.mapJourneyLocations.isEmpty {
+            SectionCard(title: "Map", subtitle: "Journey locations with saved coordinates") {
                 Map(initialPosition: .region(mapRegion), interactionModes: []) {
-                    ForEach(trip.mapStopSummaries) { summary in
-                        if let coordinate = coordinate(for: summary) {
-                            Marker(
-                                summary.locationLabel.isEmpty ? trip.title : summary.locationLabel,
-                                coordinate: coordinate
-                            )
+                    ForEach(trip.mapJourneyLocations) { location in
+                        Marker(
+                            markerTitle(for: location),
+                            coordinate: location.location.coordinate
+                        )
                             .tint(AppTheme.ColorToken.accent)
-                        }
                     }
                 }
                 .frame(height: 220)
@@ -290,7 +339,7 @@ struct TripDetailView: View {
     }
 
     private var mapRegion: MKCoordinateRegion {
-        let coordinates = trip.mapStopSummaries.compactMap(coordinate(for:))
+        let coordinates = trip.mapJourneyLocations.map(\.location.coordinate)
 
         guard
             let minLatitude = coordinates.map(\.latitude).min(),
@@ -316,9 +365,17 @@ struct TripDetailView: View {
         )
     }
 
-    private func coordinate(for summary: TripStopSummary) -> CLLocationCoordinate2D? {
-        guard let latitude = summary.latitude, let longitude = summary.longitude else { return nil }
-        return CLLocationCoordinate2D(latitude: latitude, longitude: longitude)
+    private func markerTitle(for location: TripJourneyLocation) -> String {
+        switch location.kind {
+        case .start:
+            return "Start: \(location.location.shortLabel)"
+        case .end:
+            return trip.returnsToStart
+                ? "Back home: \(location.location.shortLabel)"
+                : "End: \(location.location.shortLabel)"
+        case .stop:
+            return location.locationLabel.isEmpty ? trip.title : location.locationLabel
+        }
     }
 
     private func toggleFavorite() {

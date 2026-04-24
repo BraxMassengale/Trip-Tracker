@@ -10,7 +10,17 @@ final class Trip {
     var endDate: Date? = nil
     var notes: String? = nil
     var tags: [String] = []
+    var companions: [String] = []
     @Attribute(.externalStorage) var photos: [Data]? = nil
+    var startLocationName: String = ""
+    var startLocationCountry: String = ""
+    var startLatitude: Double? = nil
+    var startLongitude: Double? = nil
+    var endLocationName: String = ""
+    var endLocationCountry: String = ""
+    var endLatitude: Double? = nil
+    var endLongitude: Double? = nil
+    var returnsToStart: Bool = false
     var latitude: Double? = nil
     var longitude: Double? = nil
     var rating: Int? = nil
@@ -26,7 +36,17 @@ final class Trip {
         endDate: Date? = nil,
         notes: String? = nil,
         tags: [String] = [],
+        companions: [String] = [],
         photos: [Data]? = nil,
+        startLocationName: String = "",
+        startLocationCountry: String = "",
+        startLatitude: Double? = nil,
+        startLongitude: Double? = nil,
+        endLocationName: String = "",
+        endLocationCountry: String = "",
+        endLatitude: Double? = nil,
+        endLongitude: Double? = nil,
+        returnsToStart: Bool = false,
         latitude: Double? = nil,
         longitude: Double? = nil,
         rating: Int? = nil,
@@ -40,7 +60,17 @@ final class Trip {
         self.endDate = endDate
         self.notes = notes
         self.tags = tags
+        self.companions = companions
         self.photos = photos
+        self.startLocationName = startLocationName
+        self.startLocationCountry = startLocationCountry
+        self.startLatitude = startLatitude
+        self.startLongitude = startLongitude
+        self.endLocationName = endLocationName
+        self.endLocationCountry = endLocationCountry
+        self.endLatitude = endLatitude
+        self.endLongitude = endLongitude
+        self.returnsToStart = returnsToStart
         self.latitude = latitude
         self.longitude = longitude
         self.rating = rating
@@ -110,11 +140,107 @@ extension Trip {
     }
 
     var hasCoordinates: Bool {
-        mapStopSummaries.contains { $0.hasCoordinates }
+        mapJourneyLocations.contains { $0.hasCoordinates }
     }
 
     var mapStopSummaries: [TripStopSummary] {
         stopSummaries.filter { $0.hasCoordinates }
+    }
+
+    var startLocation: TripLocation? {
+        location(
+            name: startLocationName,
+            country: startLocationCountry,
+            latitude: startLatitude,
+            longitude: startLongitude
+        )
+    }
+
+    var endLocation: TripLocation? {
+        if returnsToStart, let startLocation {
+            return startLocation
+        }
+
+        return location(
+            name: endLocationName,
+            country: endLocationCountry,
+            latitude: endLatitude,
+            longitude: endLongitude
+        )
+    }
+
+    var mapJourneyLocations: [TripJourneyLocation] {
+        journeyLocations.filter(\.hasCoordinates)
+    }
+
+    var journeyLocations: [TripJourneyLocation] {
+        var locations: [TripJourneyLocation] = []
+
+        if let startLocation {
+            locations.append(TripJourneyLocation(
+                id: "start-\(String(describing: persistentModelID))",
+                trip: self,
+                location: startLocation,
+                date: startDate,
+                arrivalMode: nil,
+                kind: .start
+            ))
+        }
+
+        locations.append(contentsOf: stopSummaries.compactMap { summary in
+            guard let location = summary.location else { return nil }
+            return TripJourneyLocation(
+                id: "stop-\(summary.id)",
+                trip: self,
+                location: location,
+                date: summary.occurredAt,
+                arrivalMode: summary.arrivalMode,
+                kind: .stop
+            )
+        })
+
+        if let endLocation {
+            locations.append(TripJourneyLocation(
+                id: "end-\(String(describing: persistentModelID))",
+                trip: self,
+                location: endLocation,
+                date: endDate ?? stopSummaries.last?.occurredAt ?? startDate,
+                arrivalMode: nil,
+                kind: .end
+            ))
+        }
+
+        return locations
+    }
+
+    var journeyEndpointSummary: String? {
+        let start = startLocation?.shortLabel
+        let end = endLocation?.shortLabel
+
+        switch (start, end) {
+        case let (.some(start), .some(end)):
+            return "\(start) -> \(end)"
+        case let (.some(start), .none):
+            return "Starts in \(start)"
+        case let (.none, .some(end)):
+            return "Ends in \(end)"
+        case (.none, .none):
+            return nil
+        }
+    }
+
+    func setStartLocation(_ location: TripLocation?) {
+        startLocationName = location?.destinationName ?? ""
+        startLocationCountry = location?.country ?? ""
+        startLatitude = location?.latitude
+        startLongitude = location?.longitude
+    }
+
+    func setEndLocation(_ location: TripLocation?) {
+        endLocationName = location?.destinationName ?? ""
+        endLocationCountry = location?.country ?? ""
+        endLatitude = location?.latitude
+        endLongitude = location?.longitude
     }
 
     var previewPhotoData: Data? {
@@ -203,5 +329,20 @@ extension Trip {
         }
 
         return result
+    }
+
+    private func location(
+        name: String,
+        country: String,
+        latitude: Double?,
+        longitude: Double?
+    ) -> TripLocation? {
+        guard let latitude, let longitude else { return nil }
+        return TripLocation(
+            latitude: latitude,
+            longitude: longitude,
+            destinationName: name,
+            country: country
+        )
     }
 }

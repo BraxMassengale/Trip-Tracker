@@ -42,17 +42,20 @@ final class TripsViewModel {
     var sortMode: TripSortMode = .newest
     var filter: TripFilter = .all
     var tagFilters: Set<String> = []
+    var companionFilters: Set<String> = []
 
     var hasActiveFilters: Bool {
         !searchQuery.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         || filter != .all
         || !tagFilters.isEmpty
+        || !companionFilters.isEmpty
     }
 
     func clearAll() {
         searchQuery = ""
         filter = .all
         tagFilters = []
+        companionFilters = []
     }
 
     func matches(_ trip: Trip) -> Bool {
@@ -71,8 +74,10 @@ final class TripsViewModel {
             let haystack = [
                 trip.title,
                 trip.displayDestinationSummary,
+                trip.journeyEndpointSummary ?? "",
                 trip.notes ?? "",
                 trip.tags.joined(separator: " "),
+                trip.companions.joined(separator: " "),
                 stopHaystack
             ]
             .joined(separator: " ")
@@ -98,6 +103,12 @@ final class TripsViewModel {
             let tripTags = Set(trip.tags.map { $0.lowercased() })
             let required = Set(tagFilters.map { $0.lowercased() })
             if !required.isSubset(of: tripTags) { return false }
+        }
+
+        if !companionFilters.isEmpty {
+            let tripCompanions = Set(trip.companions.map { $0.lowercased() })
+            let required = Set(companionFilters.map { $0.lowercased() })
+            if !required.isSubset(of: tripCompanions) { return false }
         }
 
         return true
