@@ -9,6 +9,7 @@ struct TripStopDraft: Identifiable, Equatable {
     var location: TripLocation?
     var notes: String
     var journal: String
+    var arrivalMode: TransportMode?
     var photos: [Data]
 
     init(
@@ -18,6 +19,7 @@ struct TripStopDraft: Identifiable, Equatable {
         location: TripLocation? = nil,
         notes: String = "",
         journal: String = "",
+        arrivalMode: TransportMode? = nil,
         photos: [Data] = []
     ) {
         self.id = id
@@ -26,6 +28,7 @@ struct TripStopDraft: Identifiable, Equatable {
         self.location = location
         self.notes = notes
         self.journal = journal
+        self.arrivalMode = arrivalMode
         self.photos = photos
     }
 
@@ -44,6 +47,7 @@ struct TripStopDraft: Identifiable, Equatable {
         }()
         self.notes = stop.notes ?? ""
         self.journal = stop.journal ?? ""
+        self.arrivalMode = stop.arrivalMode
         self.photos = stop.photos ?? []
     }
 
@@ -51,6 +55,7 @@ struct TripStopDraft: Identifiable, Equatable {
         location != nil
         || !notes.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         || !journal.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        || arrivalMode != nil
         || !photos.isEmpty
     }
 
@@ -73,6 +78,7 @@ struct TripStopEditorCard: View {
             header
             locationButton
             DatePicker("Date", selection: $stop.date, displayedComponents: .date)
+            transportModePicker
 
             TextField(
                 "What do you want to remember here?",
@@ -164,6 +170,52 @@ struct TripStopEditorCard: View {
             )
         }
         .buttonStyle(.plain)
+    }
+
+    private var transportModePicker: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Arrived by")
+                .font(.footnote.weight(.medium))
+                .foregroundStyle(AppTheme.ColorToken.secondaryInk)
+
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 8) {
+                    ForEach(TransportMode.allCases) { mode in
+                        transportModeButton(for: mode)
+                    }
+                }
+            }
+        }
+    }
+
+    private func transportModeButton(for mode: TransportMode) -> some View {
+        let isSelected = stop.arrivalMode == mode
+
+        return Button {
+            stop.arrivalMode = isSelected ? nil : mode
+            Haptics.selection()
+        } label: {
+            Image(systemName: mode.symbolName)
+                .font(.headline)
+                .frame(width: 42, height: 38)
+                .foregroundStyle(isSelected
+                    ? AppTheme.ColorToken.cardFill
+                    : AppTheme.ColorToken.ink)
+                .background(
+                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .fill(isSelected
+                            ? AppTheme.ColorToken.accent
+                            : AppTheme.ColorToken.cardFill)
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .stroke(AppTheme.ColorToken.cardBorder, lineWidth: 1)
+                )
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(mode.label)
+        .accessibilityValue(isSelected ? "Selected" : "Not selected")
+        .accessibilityHint(isSelected ? "Clears the arrival mode" : "Sets the arrival mode")
     }
 
     private var photoStrip: some View {

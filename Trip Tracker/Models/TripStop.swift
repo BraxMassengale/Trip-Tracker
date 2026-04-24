@@ -1,6 +1,45 @@
 import Foundation
 import SwiftData
 
+enum TransportMode: String, Codable, CaseIterable, Identifiable {
+    case flight
+    case train
+    case car
+    case bus
+    case ferry
+    case walk
+    case bike
+    case other
+
+    var id: String { rawValue }
+
+    var label: String {
+        switch self {
+        case .flight: "Flight"
+        case .train: "Train"
+        case .car: "Car"
+        case .bus: "Bus"
+        case .ferry: "Ferry"
+        case .walk: "Walk"
+        case .bike: "Bike"
+        case .other: "Other"
+        }
+    }
+
+    var symbolName: String {
+        switch self {
+        case .flight: "airplane"
+        case .train: "train.side.front.car"
+        case .car: "car.fill"
+        case .bus: "bus"
+        case .ferry: "ferry"
+        case .walk: "figure.walk"
+        case .bike: "bicycle"
+        case .other: "ellipsis"
+        }
+    }
+}
+
 @Model
 final class TripStop {
     var destinationName: String = ""
@@ -8,6 +47,7 @@ final class TripStop {
     var occurredAt: Date = Date()
     var notes: String? = nil
     var journal: String? = nil
+    var arrivalMode: TransportMode? = nil
     @Attribute(.externalStorage) var photos: [Data]? = nil
     var latitude: Double? = nil
     var longitude: Double? = nil
@@ -20,6 +60,7 @@ final class TripStop {
         occurredAt: Date,
         notes: String? = nil,
         journal: String? = nil,
+        arrivalMode: TransportMode? = nil,
         photos: [Data]? = nil,
         latitude: Double? = nil,
         longitude: Double? = nil,
@@ -30,6 +71,7 @@ final class TripStop {
         self.occurredAt = occurredAt
         self.notes = notes
         self.journal = journal
+        self.arrivalMode = arrivalMode
         self.photos = photos
         self.latitude = latitude
         self.longitude = longitude
@@ -45,6 +87,7 @@ struct TripStopSummary: Identifiable {
     let occurredAt: Date
     let notes: String?
     let journal: String?
+    let arrivalMode: TransportMode?
     let photos: [Data]
     let latitude: Double?
     let longitude: Double?

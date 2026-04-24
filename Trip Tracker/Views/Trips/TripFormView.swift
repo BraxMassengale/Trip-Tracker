@@ -420,6 +420,7 @@ struct TripFormView: View {
                 stop.occurredAt = draft.date
                 stop.notes = trimmedStopNotes.isEmpty ? nil : trimmedStopNotes
                 stop.journal = trimmedJournal.isEmpty ? nil : trimmedJournal
+                stop.arrivalMode = draft.arrivalMode
                 stop.photos = draft.photos.isEmpty ? nil : draft.photos
                 stop.latitude = location.latitude
                 stop.longitude = location.longitude
@@ -433,6 +434,7 @@ struct TripFormView: View {
                     occurredAt: draft.date,
                     notes: trimmedStopNotes.isEmpty ? nil : trimmedStopNotes,
                     journal: trimmedJournal.isEmpty ? nil : trimmedJournal,
+                    arrivalMode: draft.arrivalMode,
                     photos: draft.photos.isEmpty ? nil : draft.photos,
                     latitude: location.latitude,
                     longitude: location.longitude,

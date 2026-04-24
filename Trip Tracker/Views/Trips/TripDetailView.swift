@@ -194,11 +194,70 @@ struct TripDetailView: View {
             subtitle: trip.stopCountLabel
         ) {
             VStack(spacing: 12) {
+                if shouldShowTransportChain {
+                    transportChain
+                }
+
                 ForEach(Array(trip.stopSummaries.enumerated()), id: \.element.id) { index, summary in
                     TripStopTimelineCard(summary: summary, position: index + 1)
                 }
             }
         }
+    }
+
+    private var shouldShowTransportChain: Bool {
+        trip.stopSummaries.count > 1
+    }
+
+    private var transportChain: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 8) {
+                ForEach(Array(trip.stopSummaries.enumerated()), id: \.element.id) { index, summary in
+                    if index > 0, let mode = summary.arrivalMode {
+                        Image(systemName: mode.symbolName)
+                            .font(.footnote.weight(.semibold))
+                            .foregroundStyle(AppTheme.ColorToken.accent)
+                            .accessibilityLabel(mode.label)
+                    }
+
+                    Text(transportChainLabel(for: summary, fallback: "Stop \(index + 1)"))
+                        .font(.footnote.weight(.medium))
+                        .foregroundStyle(AppTheme.ColorToken.ink)
+                        .lineLimit(1)
+                }
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 10)
+        }
+        .background(
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .fill(AppTheme.ColorToken.canvas)
+        )
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(transportChainAccessibilityLabel)
+    }
+
+    private func transportChainLabel(for summary: TripStopSummary, fallback: String) -> String {
+        let destination = summary.destinationName.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !destination.isEmpty {
+            return destination
+        }
+
+        let country = summary.country.trimmingCharacters(in: .whitespacesAndNewlines)
+        return country.isEmpty ? fallback : country
+    }
+
+    private var transportChainAccessibilityLabel: String {
+        trip.stopSummaries
+            .enumerated()
+            .map { index, summary in
+                let stopLabel = transportChainLabel(for: summary, fallback: "Stop \(index + 1)")
+                guard index > 0, let mode = summary.arrivalMode else {
+                    return stopLabel
+                }
+                return "\(mode.label) to \(stopLabel)"
+            }
+            .joined(separator: ", ")
     }
 
     @ViewBuilder
