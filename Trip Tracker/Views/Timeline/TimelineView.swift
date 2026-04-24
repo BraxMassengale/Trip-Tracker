@@ -81,16 +81,23 @@ struct TimelineView: View {
     }
 
     private var emptyState: some View {
-        VStack(spacing: 16) {
-            Image(systemName: "clock")
-                .font(.system(size: 48, weight: .light))
-                .foregroundStyle(AppTheme.ColorToken.secondaryInk)
-            Text("Your timeline fills as you add trips.")
-                .font(.subheadline)
-                .foregroundStyle(AppTheme.ColorToken.secondaryInk)
-                .multilineTextAlignment(.center)
-                .padding(.horizontal, 32)
+        ScrollView {
+            SectionCard(
+                title: "Your timeline is waiting",
+                subtitle: "Each trip you save will drop into a year-by-year story here."
+            ) {
+                VStack(alignment: .leading, spacing: 14) {
+                    Image(systemName: "clock")
+                        .font(.system(size: 34, weight: .light))
+                        .foregroundStyle(AppTheme.ColorToken.secondaryInk)
+
+                    Text("Once you add your first trip, this screen becomes the long view of where you've been.")
+                        .font(.subheadline)
+                        .foregroundStyle(AppTheme.ColorToken.secondaryInk)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            .padding()
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 }

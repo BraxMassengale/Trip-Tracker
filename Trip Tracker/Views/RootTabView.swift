@@ -3,45 +3,31 @@ import SwiftData
 
 struct RootTabView: View {
     @State private var tripsViewModel = TripsViewModel()
+    @AppStorage("appearance") private var appearance = AppearancePreference.system.rawValue
 
     var body: some View {
         TabView {
             TripsListView(vm: tripsViewModel)
                 .tabItem { Label("Trips", systemImage: "suitcase") }
 
-            PlaceholderTab(title: "Map", symbol: "map")
+            TripMapView()
                 .tabItem { Label("Map", systemImage: "map") }
 
             TimelineView()
                 .tabItem { Label("Timeline", systemImage: "clock") }
 
-            PlaceholderTab(title: "Stats", symbol: "chart.bar")
+            StatsView()
                 .tabItem { Label("Stats", systemImage: "chart.bar") }
 
-            PlaceholderTab(title: "Settings", symbol: "gearshape")
+            SettingsView()
                 .tabItem { Label("Settings", systemImage: "gearshape") }
         }
         .tint(AppTheme.ColorToken.accent)
+        .preferredColorScheme(currentAppearance.colorScheme)
     }
-}
 
-private struct PlaceholderTab: View {
-    let title: String
-    let symbol: String
-
-    var body: some View {
-        NavigationStack {
-            VStack(spacing: 16) {
-                Image(systemName: symbol)
-                    .font(.system(size: 48, weight: .light))
-                    .foregroundStyle(AppTheme.ColorToken.secondaryInk)
-                Text("\(title) — coming soon")
-                    .font(.headline)
-                    .foregroundStyle(AppTheme.ColorToken.secondaryInk)
-            }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .navigationTitle(title)
-        }
+    private var currentAppearance: AppearancePreference {
+        AppearancePreference(rawValue: appearance) ?? .system
     }
 }
 

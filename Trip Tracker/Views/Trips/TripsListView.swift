@@ -100,20 +100,40 @@ struct TripsListView: View {
     }
 
     private var emptyState: some View {
-        VStack(spacing: 16) {
-            Image(systemName: "suitcase")
-                .font(.system(size: 48, weight: .light))
-                .foregroundStyle(AppTheme.ColorToken.secondaryInk)
-            Text("Your journal starts here")
-                .font(.headline)
-                .foregroundStyle(AppTheme.ColorToken.ink)
-            Text("Tap + to record your first trip.")
-                .font(.subheadline)
-                .foregroundStyle(AppTheme.ColorToken.secondaryInk)
-                .multilineTextAlignment(.center)
+        ScrollView {
+            SectionCard(
+                title: "Your journal starts here",
+                subtitle: "Add your first trip and this list will turn into a travel archive."
+            ) {
+                VStack(alignment: .leading, spacing: 16) {
+                    Image(systemName: "suitcase")
+                        .font(.system(size: 34, weight: .light))
+                        .foregroundStyle(AppTheme.ColorToken.secondaryInk)
+
+                    Text("Keep places, dates, notes, and photos together in one calm timeline.")
+                        .font(.subheadline)
+                        .foregroundStyle(AppTheme.ColorToken.secondaryInk)
+
+                    Button {
+                        showingForm = true
+                        Haptics.selection()
+                    } label: {
+                        Label("Create your first trip", systemImage: "plus")
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundStyle(AppTheme.ColorToken.cardFill)
+                            .padding(.horizontal, 14)
+                            .padding(.vertical, 10)
+                            .background(
+                                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                    .fill(AppTheme.ColorToken.accent)
+                            )
+                    }
+                    .buttonStyle(.plain)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            .padding()
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .padding(.horizontal, 32)
     }
 
     private var noMatches: some View {
