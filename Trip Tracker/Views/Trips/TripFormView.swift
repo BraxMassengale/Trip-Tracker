@@ -351,12 +351,14 @@ struct TripFormView: View {
             guard let location = draft.location else { continue }
 
             let trimmedStopNotes = draft.notes.trimmingCharacters(in: .whitespacesAndNewlines)
+            let trimmedJournal = draft.journal.trimmingCharacters(in: .whitespacesAndNewlines)
 
             if let existingID = draft.existingStopID, let stop = existingStops[existingID] {
                 stop.destinationName = location.destinationName
                 stop.country = location.country
                 stop.occurredAt = draft.date
                 stop.notes = trimmedStopNotes.isEmpty ? nil : trimmedStopNotes
+                stop.journal = trimmedJournal.isEmpty ? nil : trimmedJournal
                 stop.photos = draft.photos.isEmpty ? nil : draft.photos
                 stop.latitude = location.latitude
                 stop.longitude = location.longitude
@@ -369,6 +371,7 @@ struct TripFormView: View {
                     country: location.country,
                     occurredAt: draft.date,
                     notes: trimmedStopNotes.isEmpty ? nil : trimmedStopNotes,
+                    journal: trimmedJournal.isEmpty ? nil : trimmedJournal,
                     photos: draft.photos.isEmpty ? nil : draft.photos,
                     latitude: location.latitude,
                     longitude: location.longitude,
