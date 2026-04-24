@@ -17,6 +17,10 @@ struct TripStopTimelineCard: View {
                         .foregroundStyle(AppTheme.ColorToken.ink)
                 }
 
+                if let journal = summary.journal?.trimmingCharacters(in: .whitespacesAndNewlines), !journal.isEmpty {
+                    journalQuote(journal)
+                }
+
                 if !summary.photos.isEmpty {
                     ScrollView(.horizontal, showsIndicators: false) {
                         HStack(spacing: 10) {
@@ -40,6 +44,20 @@ struct TripStopTimelineCard: View {
                 }
             }
         }
+    }
+
+    private func journalQuote(_ text: String) -> some View {
+        HStack(alignment: .top, spacing: 12) {
+            RoundedRectangle(cornerRadius: 2, style: .continuous)
+                .fill(AppTheme.ColorToken.accent.opacity(0.55))
+                .frame(width: 3)
+
+            Text(text)
+                .font(.callout.italic())
+                .foregroundStyle(AppTheme.ColorToken.ink)
+                .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .padding(.leading, 4)
     }
 
     private var dateLabel: String {

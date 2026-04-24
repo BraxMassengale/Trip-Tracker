@@ -70,6 +70,7 @@ extension Trip {
                     country: stop.country,
                     occurredAt: stop.occurredAt,
                     notes: stop.notes,
+                    journal: stop.journal,
                     photos: stop.photos ?? [],
                     latitude: stop.latitude,
                     longitude: stop.longitude,
@@ -89,6 +90,7 @@ extension Trip {
                 country: country,
                 occurredAt: startDate,
                 notes: nil,
+                journal: nil,
                 photos: [],
                 latitude: latitude,
                 longitude: longitude,
@@ -122,6 +124,29 @@ extension Trip {
 
     var hasAnyPhotos: Bool {
         !(photos ?? []).isEmpty || stopSummaries.contains { !$0.photos.isEmpty }
+    }
+
+    var earliestStopJournalExcerpt: String? {
+        let maxLength = 80
+        for summary in stopSummaries {
+            let trimmed = (summary.journal ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !trimmed.isEmpty else { continue }
+            if trimmed.count <= maxLength {
+                return trimmed
+            }
+            let endIndex = trimmed.index(trimmed.startIndex, offsetBy: maxLength)
+            let truncated = String(trimmed[..<endIndex]).trimmingCharacters(in: .whitespacesAndNewlines)
+            return truncated + "…"
+        }
+        return nil
+    }
+
+    var timelineSubtitle: String? {
+        let trimmedNotes = (notes ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        if !trimmedNotes.isEmpty {
+            return trimmedNotes
+        }
+        return earliestStopJournalExcerpt
     }
 
     var stopCountLabel: String {

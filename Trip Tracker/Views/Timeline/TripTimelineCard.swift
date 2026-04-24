@@ -32,6 +32,13 @@ struct TripTimelineCard: View {
                     .font(.subheadline)
                 }
 
+                if let subtitle = trip.timelineSubtitle {
+                    Text(subtitle)
+                        .font(.footnote)
+                        .foregroundStyle(AppTheme.ColorToken.secondaryInk)
+                        .lineLimit(2)
+                }
+
                 HStack(spacing: 6) {
                     Image(systemName: "calendar")
                     Text(dateLabel)

@@ -8,6 +8,7 @@ struct TripStopDraft: Identifiable, Equatable {
     var date: Date
     var location: TripLocation?
     var notes: String
+    var journal: String
     var photos: [Data]
 
     init(
@@ -16,6 +17,7 @@ struct TripStopDraft: Identifiable, Equatable {
         date: Date = Date(),
         location: TripLocation? = nil,
         notes: String = "",
+        journal: String = "",
         photos: [Data] = []
     ) {
         self.id = id
@@ -23,6 +25,7 @@ struct TripStopDraft: Identifiable, Equatable {
         self.date = date
         self.location = location
         self.notes = notes
+        self.journal = journal
         self.photos = photos
     }
 
@@ -40,12 +43,14 @@ struct TripStopDraft: Identifiable, Equatable {
             )
         }()
         self.notes = stop.notes ?? ""
+        self.journal = stop.journal ?? ""
         self.photos = stop.photos ?? []
     }
 
     var hasMeaningfulContent: Bool {
         location != nil
         || !notes.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        || !journal.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         || !photos.isEmpty
     }
 
@@ -75,6 +80,13 @@ struct TripStopEditorCard: View {
                 axis: .vertical
             )
             .lineLimit(2...6)
+
+            TextField(
+                "Journal — what do you want to remember?",
+                text: $stop.journal,
+                axis: .vertical
+            )
+            .lineLimit(3...10)
 
             if !stop.photos.isEmpty {
                 photoStrip

@@ -7,6 +7,7 @@ final class TripStop {
     var country: String = ""
     var occurredAt: Date = Date()
     var notes: String? = nil
+    var journal: String? = nil
     @Attribute(.externalStorage) var photos: [Data]? = nil
     var latitude: Double? = nil
     var longitude: Double? = nil
@@ -18,6 +19,7 @@ final class TripStop {
         country: String,
         occurredAt: Date,
         notes: String? = nil,
+        journal: String? = nil,
         photos: [Data]? = nil,
         latitude: Double? = nil,
         longitude: Double? = nil,
@@ -27,6 +29,7 @@ final class TripStop {
         self.country = country
         self.occurredAt = occurredAt
         self.notes = notes
+        self.journal = journal
         self.photos = photos
         self.latitude = latitude
         self.longitude = longitude
@@ -41,6 +44,7 @@ struct TripStopSummary: Identifiable {
     let country: String
     let occurredAt: Date
     let notes: String?
+    let journal: String?
     let photos: [Data]
     let latitude: Double?
     let longitude: Double?
