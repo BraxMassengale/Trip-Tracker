@@ -38,9 +38,7 @@ struct TripRowView: View {
     }
 
     private var destinationLabel: String {
-        [trip.destinationName, trip.country]
-            .filter { !$0.isEmpty }
-            .joined(separator: " · ")
+        trip.displayDestinationSummary
     }
 
     private var dateLabel: String {
@@ -57,7 +55,7 @@ struct TripRowView: View {
 
     @ViewBuilder
     private var thumbnail: some View {
-        if let data = (trip.photos ?? []).first, let image = UIImage(data: data) {
+        if let data = trip.previewPhotoData, let image = UIImage(data: data) {
             Image(uiImage: image)
                 .resizable()
                 .scaledToFill()

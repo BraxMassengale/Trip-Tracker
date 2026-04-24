@@ -6,12 +6,12 @@ struct TripMapView: View {
     @Query(sort: \Trip.startDate, order: .reverse) private var trips: [Trip]
 
     @State private var position: MapCameraPosition = .automatic
-    @State private var selectedTripID: PersistentIdentifier?
+    @State private var selectedStopID: String?
 
     var body: some View {
         NavigationStack {
             Group {
-                if tripsWithCoordinates.isEmpty {
+                if mapStops.isEmpty {
                     emptyState
                 } else {
                     mapContent
@@ -33,34 +33,36 @@ struct TripMapView: View {
         }
     }
 
-    private var tripsWithCoordinates: [Trip] {
-        trips.filter(\.hasCoordinates)
+    private var mapStops: [TripStopSummary] {
+        trips
+            .flatMap(\.mapStopSummaries)
+            .sorted { $0.occurredAt > $1.occurredAt }
     }
 
-    private var selectedTrip: Trip? {
-        guard let selectedTripID else { return nil }
-        return tripsWithCoordinates.first { $0.persistentModelID == selectedTripID }
+    private var selectedStop: TripStopSummary? {
+        guard let selectedStopID else { return nil }
+        return mapStops.first { $0.id == selectedStopID }
     }
 
     private var coordinateSnapshot: String {
-        tripsWithCoordinates
-            .map { trip in
-                "\(trip.persistentModelID)-\(trip.latitude ?? 0)-\(trip.longitude ?? 0)"
+        mapStops
+            .map { summary in
+                "\(summary.id)-\(summary.latitude ?? 0)-\(summary.longitude ?? 0)"
             }
             .joined(separator: "|")
     }
 
     private var mapContent: some View {
         Map(position: $position) {
-            ForEach(tripsWithCoordinates) { trip in
-                if let coordinate = coordinate(for: trip) {
-                    Annotation(annotationTitle(for: trip), coordinate: coordinate) {
+            ForEach(mapStops) { summary in
+                if let coordinate = coordinate(for: summary) {
+                    Annotation(annotationTitle(for: summary), coordinate: coordinate) {
                         Button {
-                            select(trip)
+                            select(summary)
                         } label: {
                             TripMapPin(
-                                isSelected: trip.persistentModelID == selectedTripID,
-                                isFavorite: trip.favorite
+                                isSelected: summary.id == selectedStopID,
+                                isFavorite: summary.trip.favorite
                             )
                         }
                         .buttonStyle(.plain)
@@ -97,15 +99,17 @@ struct TripMapView: View {
 
     @ViewBuilder
     private var bottomCard: some View {
-        if let selectedTrip {
-            NavigationLink(value: selectedTrip) {
+        if let selectedStop {
+            NavigationLink(value: selectedStop.trip) {
                 SectionCard(
-                    title: selectedTrip.title,
-                    subtitle: destinationLabel(for: selectedTrip)
+                    title: selectedStop.trip.title,
+                    subtitle: selectedStop.locationLabel.isEmpty
+                        ? selectedStop.trip.displayDestinationSummary
+                        : selectedStop.locationLabel
                 ) {
                     HStack(alignment: .center, spacing: 12) {
                         VStack(alignment: .leading, spacing: 6) {
-                            Label(dateLabel(for: selectedTrip), systemImage: "calendar")
+                            Label(dateLabel(for: selectedStop), systemImage: "calendar")
                                 .font(.subheadline)
                                 .foregroundStyle(AppTheme.ColorToken.secondaryInk)
 
@@ -130,11 +134,11 @@ struct TripMapView: View {
         } else {
             SectionCard(
                 title: "Pinned destinations",
-                subtitle: tripsWithCoordinates.count == 1
-                    ? "1 trip on the map"
-                    : "\(tripsWithCoordinates.count) trips on the map"
+                subtitle: mapStops.count == 1
+                    ? "1 stop on the map"
+                    : "\(mapStops.count) stops on the map"
             ) {
-                Text("Tap any pin to preview the trip and jump into its detail screen.")
+                Text("Tap any pin to preview the stop and jump into its trip timeline.")
                     .font(.subheadline)
                     .foregroundStyle(AppTheme.ColorToken.secondaryInk)
             }
@@ -145,30 +149,30 @@ struct TripMapView: View {
         }
     }
 
-    private func select(_ trip: Trip) {
-        selectedTripID = trip.persistentModelID
-        position = .region(region(focusingOn: trip))
+    private func select(_ summary: TripStopSummary) {
+        selectedStopID = summary.id
+        position = .region(region(focusingOn: summary))
         Haptics.selection()
     }
 
     private func pruneSelection() {
-        guard let selectedTripID else { return }
-        guard tripsWithCoordinates.contains(where: { $0.persistentModelID == selectedTripID }) else {
-            self.selectedTripID = nil
+        guard let selectedStopID else { return }
+        guard mapStops.contains(where: { $0.id == selectedStopID }) else {
+            self.selectedStopID = nil
             return
         }
     }
 
     private func refreshCameraPosition() {
-        guard selectedTrip == nil else { return }
+        guard selectedStop == nil else { return }
         position = initialCameraPosition
     }
 
     private var initialCameraPosition: MapCameraPosition {
-        guard !tripsWithCoordinates.isEmpty else { return .automatic }
+        guard !mapStops.isEmpty else { return .automatic }
 
-        let latitudes = tripsWithCoordinates.compactMap(\.latitude)
-        let longitudes = tripsWithCoordinates.compactMap(\.longitude)
+        let latitudes = mapStops.compactMap(\.latitude)
+        let longitudes = mapStops.compactMap(\.longitude)
 
         guard
             let minLatitude = latitudes.min(),
@@ -196,33 +200,25 @@ struct TripMapView: View {
         ))
     }
 
-    private func region(focusingOn trip: Trip) -> MKCoordinateRegion {
-        let center = coordinate(for: trip) ?? CLLocationCoordinate2D(latitude: 0, longitude: 0)
+    private func region(focusingOn summary: TripStopSummary) -> MKCoordinateRegion {
+        let center = coordinate(for: summary) ?? CLLocationCoordinate2D(latitude: 0, longitude: 0)
         return MKCoordinateRegion(
             center: center,
             span: MKCoordinateSpan(latitudeDelta: 0.3, longitudeDelta: 0.3)
         )
     }
 
-    private func coordinate(for trip: Trip) -> CLLocationCoordinate2D? {
-        guard let latitude = trip.latitude, let longitude = trip.longitude else { return nil }
+    private func coordinate(for summary: TripStopSummary) -> CLLocationCoordinate2D? {
+        guard let latitude = summary.latitude, let longitude = summary.longitude else { return nil }
         return CLLocationCoordinate2D(latitude: latitude, longitude: longitude)
     }
 
-    private func annotationTitle(for trip: Trip) -> String {
-        destinationLabel(for: trip).isEmpty ? trip.title : destinationLabel(for: trip)
+    private func annotationTitle(for summary: TripStopSummary) -> String {
+        summary.locationLabel.isEmpty ? summary.trip.title : summary.locationLabel
     }
 
-    private func destinationLabel(for trip: Trip) -> String {
-        [trip.destinationName, trip.country]
-            .filter { !$0.isEmpty }
-            .joined(separator: " · ")
-    }
-
-    private func dateLabel(for trip: Trip) -> String {
-        let start = Self.dateFormatter.string(from: trip.startDate)
-        guard let end = trip.endDate, end > trip.startDate else { return start }
-        return "\(start) - \(Self.dateFormatter.string(from: end))"
+    private func dateLabel(for summary: TripStopSummary) -> String {
+        return Self.dateFormatter.string(from: summary.occurredAt)
     }
 
     private static let dateFormatter: DateFormatter = {
@@ -281,6 +277,7 @@ private struct Triangle: Shape {
 #Preview("Map With Trips") {
     let container = try! ModelContainer(
         for: Trip.self,
+        TripStop.self,
         configurations: ModelConfiguration(isStoredInMemoryOnly: true)
     )
 
@@ -313,6 +310,12 @@ private struct Triangle: Shape {
 }
 
 #Preview("Empty Map") {
-    TripMapView()
-        .modelContainer(for: Trip.self, inMemory: true)
+    let container = try! ModelContainer(
+        for: Trip.self,
+        TripStop.self,
+        configurations: ModelConfiguration(isStoredInMemoryOnly: true)
+    )
+
+    return TripMapView()
+        .modelContainer(container)
 }

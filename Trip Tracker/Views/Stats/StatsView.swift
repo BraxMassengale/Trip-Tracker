@@ -97,11 +97,7 @@ struct StatsView: View {
     }
 
     private var countryCount: Int {
-        Set(
-            trips
-                .map(\.country)
-                .filter { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
-        ).count
+        Set(trips.flatMap(\.countryValues)).count
     }
 
     private var favoriteCount: Int {
@@ -166,6 +162,7 @@ private struct StatTile: View {
 #Preview("With Stats") {
     let container = try! ModelContainer(
         for: Trip.self,
+        TripStop.self,
         configurations: ModelConfiguration(isStoredInMemoryOnly: true)
     )
 
@@ -193,6 +190,12 @@ private struct StatTile: View {
 }
 
 #Preview("Empty Stats") {
-    StatsView()
-        .modelContainer(for: Trip.self, inMemory: true)
+    let container = try! ModelContainer(
+        for: Trip.self,
+        TripStop.self,
+        configurations: ModelConfiguration(isStoredInMemoryOnly: true)
+    )
+
+    return StatsView()
+        .modelContainer(container)
 }

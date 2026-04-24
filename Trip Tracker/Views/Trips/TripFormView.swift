@@ -1,6 +1,5 @@
 import SwiftUI
 import SwiftData
-import UIKit
 
 struct TripFormView: View {
     @Environment(\.dismiss) private var dismiss
@@ -9,7 +8,6 @@ struct TripFormView: View {
     private let editing: Trip?
 
     @State private var title: String
-    @State private var location: TripLocation?
     @State private var startDate: Date
     @State private var hasEndDate: Bool
     @State private var endDate: Date
@@ -18,9 +16,9 @@ struct TripFormView: View {
     @State private var newTag: String = ""
     @State private var favorite: Bool
     @State private var rating: Int?
-    @State private var photos: [Data]
+    @State private var tripPhotos: [Data]
+    @State private var stops: [TripStopDraft]
 
-    @State private var showingLocationPicker: Bool = false
     @State private var errorMessage: String?
     @State private var showingError: Bool = false
 
@@ -28,7 +26,6 @@ struct TripFormView: View {
         self.editing = nil
         let now = Date()
         _title = State(initialValue: "")
-        _location = State(initialValue: nil)
         _startDate = State(initialValue: now)
         _hasEndDate = State(initialValue: false)
         _endDate = State(initialValue: now)
@@ -36,22 +33,13 @@ struct TripFormView: View {
         _tags = State(initialValue: [])
         _favorite = State(initialValue: false)
         _rating = State(initialValue: nil)
-        _photos = State(initialValue: [])
+        _tripPhotos = State(initialValue: [])
+        _stops = State(initialValue: [TripStopDraft(date: now)])
     }
 
     init(editing trip: Trip) {
         self.editing = trip
-        let loc: TripLocation? = {
-            guard let lat = trip.latitude, let lon = trip.longitude else { return nil }
-            return TripLocation(
-                latitude: lat,
-                longitude: lon,
-                destinationName: trip.destinationName,
-                country: trip.country
-            )
-        }()
         _title = State(initialValue: trip.title)
-        _location = State(initialValue: loc)
         _startDate = State(initialValue: trip.startDate)
         _hasEndDate = State(initialValue: trip.endDate != nil)
         _endDate = State(initialValue: trip.endDate ?? trip.startDate)
@@ -59,21 +47,28 @@ struct TripFormView: View {
         _tags = State(initialValue: trip.tags)
         _favorite = State(initialValue: trip.favorite)
         _rating = State(initialValue: trip.rating)
-        _photos = State(initialValue: trip.photos ?? [])
+        _tripPhotos = State(initialValue: trip.photos ?? [])
+        _stops = State(initialValue: Self.initialStops(from: trip))
     }
 
     var body: some View {
         NavigationStack {
             Form {
                 detailsSection
+                stopsSection
                 notesSection
                 tagsSection
-                photosSection
+                tripPhotosSection
                 extrasSection
             }
             .navigationTitle(editing == nil ? "New Trip" : "Edit Trip")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    if stops.count > 1 {
+                        EditButton()
+                    }
+                }
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel") { dismiss() }
                 }
@@ -81,9 +76,6 @@ struct TripFormView: View {
                     Button("Save") { save() }
                         .disabled(!canSave)
                 }
-            }
-            .sheet(isPresented: $showingLocationPicker) {
-                LocationPickerSheet(location: $location)
             }
             .alert("Couldn't save", isPresented: $showingError) {
                 Button("OK", role: .cancel) {}
@@ -95,36 +87,13 @@ struct TripFormView: View {
 
     private var canSave: Bool {
         !title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        && !stops.contains(where: \.isIncomplete)
     }
 
     private var detailsSection: some View {
         Section("Details") {
             TextField("Title", text: $title)
                 .textInputAutocapitalization(.words)
-
-            Button {
-                showingLocationPicker = true
-            } label: {
-                HStack {
-                    Text("Location")
-                        .foregroundStyle(AppTheme.ColorToken.ink)
-                    Spacer()
-                    Text(location?.destinationName ?? "Add location")
-                        .foregroundStyle(AppTheme.ColorToken.secondaryInk)
-                    Image(systemName: "chevron.right")
-                        .font(.footnote.weight(.semibold))
-                        .foregroundStyle(AppTheme.ColorToken.secondaryInk)
-                }
-            }
-
-            if location != nil {
-                Button(role: .destructive) {
-                    location = nil
-                } label: {
-                    Text("Clear location")
-                }
-            }
-
             DatePicker("Start", selection: $startDate, displayedComponents: .date)
 
             Toggle("Has end date", isOn: $hasEndDate.animation())
@@ -139,10 +108,43 @@ struct TripFormView: View {
         }
     }
 
+    private var stopsSection: some View {
+        Section {
+            ForEach($stops) { $stop in
+                TripStopEditorCard(
+                    stop: $stop,
+                    position: position(for: stop.id),
+                    canDelete: stops.count > 1
+                ) {
+                    removeStop(id: stop.id)
+                }
+                .listRowInsets(EdgeInsets(top: 8, leading: 0, bottom: 8, trailing: 0))
+                .listRowBackground(Color.clear)
+            }
+            .onMove(perform: moveStops)
+
+            Button {
+                addStop()
+            } label: {
+                Label("Add stop", systemImage: "plus")
+            }
+        } header: {
+            Text("Stops")
+        } footer: {
+            if stops.count > 1 {
+                Text("Use Edit to reorder your stops.")
+            } else if stops.contains(where: \.isIncomplete) {
+                Text("Each stop needs a location before it can be saved.")
+            } else {
+                Text("Build this trip as an ordered set of places.")
+            }
+        }
+    }
+
     private var notesSection: some View {
-        Section("Notes") {
+        Section("Trip Notes") {
             TextField(
-                "Anything you want to remember",
+                "Anything you want to remember about the whole trip",
                 text: $notes,
                 axis: .vertical
             )
@@ -189,12 +191,12 @@ struct TripFormView: View {
         }
     }
 
-    private var photosSection: some View {
-        Section("Photos") {
-            if !photos.isEmpty {
+    private var tripPhotosSection: some View {
+        Section("Trip Photos") {
+            if !tripPhotos.isEmpty {
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 10) {
-                        ForEach(Array(photos.enumerated()), id: \.offset) { index, data in
+                        ForEach(Array(tripPhotos.enumerated()), id: \.offset) { index, data in
                             if let image = UIImage(data: data) {
                                 Image(uiImage: image)
                                     .resizable()
@@ -203,7 +205,7 @@ struct TripFormView: View {
                                     .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
                                     .overlay(alignment: .topTrailing) {
                                         Button {
-                                            photos.remove(at: index)
+                                            tripPhotos.remove(at: index)
                                             Haptics.selection()
                                         } label: {
                                             Image(systemName: "xmark.circle.fill")
@@ -219,7 +221,7 @@ struct TripFormView: View {
                 }
                 .listRowInsets(EdgeInsets(top: 8, leading: 16, bottom: 8, trailing: 16))
             }
-            ImagePicker(images: $photos)
+            ImagePicker(images: $tripPhotos)
         }
     }
 
@@ -261,10 +263,38 @@ struct TripFormView: View {
         Haptics.selection()
     }
 
+    private func addStop() {
+        let nextDate = stops.last?.date ?? startDate
+        stops.append(TripStopDraft(date: nextDate))
+        Haptics.selection()
+    }
+
+    private func removeStop(id: UUID) {
+        stops.removeAll { $0.id == id }
+        Haptics.selection()
+    }
+
+    private func moveStops(from source: IndexSet, to destination: Int) {
+        stops.move(fromOffsets: source, toOffset: destination)
+        Haptics.selection()
+    }
+
+    private func position(for stopID: UUID) -> Int {
+        (stops.firstIndex { $0.id == stopID } ?? 0) + 1
+    }
+
     private func save() {
+        if stops.contains(where: \.isIncomplete) {
+            errorMessage = "Each stop with notes or photos needs a location."
+            showingError = true
+            Haptics.error()
+            return
+        }
+
         let trimmedTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
         let trimmedNotes = notes.trimmingCharacters(in: .whitespacesAndNewlines)
         let finalEndDate: Date? = hasEndDate ? endDate : nil
+        let keptStops = stops.filter(\.hasMeaningfulContent)
 
         let trip: Trip
         if let existing = editing {
@@ -272,25 +302,35 @@ struct TripFormView: View {
         } else {
             trip = Trip(
                 title: trimmedTitle,
-                destinationName: location?.destinationName ?? "",
-                country: location?.country ?? "",
+                destinationName: "",
+                country: "",
                 startDate: startDate
             )
             context.insert(trip)
         }
 
         trip.title = trimmedTitle
-        trip.destinationName = location?.destinationName ?? ""
-        trip.country = location?.country ?? ""
         trip.startDate = startDate
         trip.endDate = finalEndDate
         trip.notes = trimmedNotes.isEmpty ? nil : trimmedNotes
         trip.tags = tags
-        trip.photos = photos.isEmpty ? nil : photos
-        trip.latitude = location?.latitude
-        trip.longitude = location?.longitude
+        trip.photos = tripPhotos.isEmpty ? nil : tripPhotos
         trip.rating = rating
         trip.favorite = favorite
+
+        syncStops(on: trip, with: keptStops)
+
+        if let firstLocation = keptStops.first?.location {
+            trip.destinationName = firstLocation.destinationName
+            trip.country = firstLocation.country
+            trip.latitude = firstLocation.latitude
+            trip.longitude = firstLocation.longitude
+        } else if editing == nil || !(editing?.orderedStops.isEmpty ?? true) {
+            trip.destinationName = ""
+            trip.country = ""
+            trip.latitude = nil
+            trip.longitude = nil
+        }
 
         if let error = PersistenceReporter.save(context, action: "save trip") {
             errorMessage = PersistenceReporter.userMessage(for: "save trip", error: error)
@@ -302,9 +342,85 @@ struct TripFormView: View {
         Haptics.success()
         dismiss()
     }
+
+    private func syncStops(on trip: Trip, with drafts: [TripStopDraft]) {
+        let existingStops = Dictionary(uniqueKeysWithValues: trip.stops.map { ($0.persistentModelID, $0) })
+        var keptIDs: Set<PersistentIdentifier> = []
+
+        for (index, draft) in drafts.enumerated() {
+            guard let location = draft.location else { continue }
+
+            let trimmedStopNotes = draft.notes.trimmingCharacters(in: .whitespacesAndNewlines)
+
+            if let existingID = draft.existingStopID, let stop = existingStops[existingID] {
+                stop.destinationName = location.destinationName
+                stop.country = location.country
+                stop.occurredAt = draft.date
+                stop.notes = trimmedStopNotes.isEmpty ? nil : trimmedStopNotes
+                stop.photos = draft.photos.isEmpty ? nil : draft.photos
+                stop.latitude = location.latitude
+                stop.longitude = location.longitude
+                stop.sortOrder = index
+                stop.trip = trip
+                keptIDs.insert(existingID)
+            } else {
+                let stop = TripStop(
+                    destinationName: location.destinationName,
+                    country: location.country,
+                    occurredAt: draft.date,
+                    notes: trimmedStopNotes.isEmpty ? nil : trimmedStopNotes,
+                    photos: draft.photos.isEmpty ? nil : draft.photos,
+                    latitude: location.latitude,
+                    longitude: location.longitude,
+                    sortOrder: index
+                )
+                context.insert(stop)
+                stop.trip = trip
+                keptIDs.insert(stop.persistentModelID)
+            }
+        }
+
+        for (existingID, stop) in existingStops where !keptIDs.contains(existingID) {
+            context.delete(stop)
+        }
+    }
+
+    private static func initialStops(from trip: Trip) -> [TripStopDraft] {
+        let actualStops = trip.orderedStops.map(TripStopDraft.init(stop:))
+        if !actualStops.isEmpty {
+            return actualStops
+        }
+
+        if
+            let latitude = trip.latitude,
+            let longitude = trip.longitude,
+            (!trip.destinationName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                || !trip.country.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+        {
+            return [
+                TripStopDraft(
+                    date: trip.startDate,
+                    location: TripLocation(
+                        latitude: latitude,
+                        longitude: longitude,
+                        destinationName: trip.destinationName,
+                        country: trip.country
+                    )
+                )
+            ]
+        }
+
+        return [TripStopDraft(date: trip.startDate)]
+    }
 }
 
 #Preview {
-    TripFormView()
-        .modelContainer(for: Trip.self, inMemory: true)
+    let container = try! ModelContainer(
+        for: Trip.self,
+        TripStop.self,
+        configurations: ModelConfiguration(isStoredInMemoryOnly: true)
+    )
+
+    return TripFormView()
+        .modelContainer(container)
 }

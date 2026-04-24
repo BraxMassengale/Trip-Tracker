@@ -26,7 +26,10 @@ struct TripDetailView: View {
                     notesCard(notes: notes)
                 }
                 if trip.photos?.count ?? 0 > 1 {
-                    galleryCard
+                    tripGalleryCard
+                }
+                if !trip.stopSummaries.isEmpty {
+                    stopsTimelineCard
                 }
                 if trip.hasCoordinates {
                     mapCard
@@ -87,7 +90,7 @@ struct TripDetailView: View {
 
     @ViewBuilder
     private var heroPhoto: some View {
-        if let first = (trip.photos ?? []).first, let image = UIImage(data: first) {
+        if let first = trip.previewPhotoData, let image = UIImage(data: first) {
             Image(uiImage: image)
                 .resizable()
                 .scaledToFill()
@@ -106,8 +109,8 @@ struct TripDetailView: View {
                         Text(trip.title)
                             .font(.title2.weight(.semibold))
                             .foregroundStyle(AppTheme.ColorToken.ink)
-                        if !destinationLabel.isEmpty {
-                            Text(destinationLabel)
+                        if !trip.displayDestinationSummary.isEmpty {
+                            Text(trip.displayDestinationSummary)
                                 .font(.subheadline)
                                 .foregroundStyle(AppTheme.ColorToken.secondaryInk)
                         }
@@ -122,6 +125,10 @@ struct TripDetailView: View {
                 Label(dateLabel, systemImage: "calendar")
                     .font(.subheadline)
                     .foregroundStyle(AppTheme.ColorToken.secondaryInk)
+
+                Text(trip.stopCountLabel)
+                    .font(.footnote.weight(.medium))
+                    .foregroundStyle(AppTheme.ColorToken.accent)
 
                 if let rating = trip.rating, rating > 0 {
                     HStack(spacing: 2) {
@@ -163,8 +170,8 @@ struct TripDetailView: View {
         }
     }
 
-    private var galleryCard: some View {
-        SectionCard(title: "Photos") {
+    private var tripGalleryCard: some View {
+        SectionCard(title: "Trip Photos") {
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 10) {
                     ForEach(Array((trip.photos ?? []).enumerated()), id: \.offset) { _, data in
@@ -181,29 +188,38 @@ struct TripDetailView: View {
         }
     }
 
-    @ViewBuilder
-    private var mapCard: some View {
-        if let lat = trip.latitude, let lon = trip.longitude {
-            SectionCard(title: "Location") {
-                let coordinate = CLLocationCoordinate2D(latitude: lat, longitude: lon)
-                let region = MKCoordinateRegion(
-                    center: coordinate,
-                    span: MKCoordinateSpan(latitudeDelta: 0.6, longitudeDelta: 0.6)
-                )
-                Map(initialPosition: .region(region), interactionModes: []) {
-                    Marker(trip.destinationName.isEmpty ? trip.title : trip.destinationName, coordinate: coordinate)
-                        .tint(AppTheme.ColorToken.accent)
+    private var stopsTimelineCard: some View {
+        SectionCard(
+            title: "Trip Timeline",
+            subtitle: trip.stopCountLabel
+        ) {
+            VStack(spacing: 12) {
+                ForEach(Array(trip.stopSummaries.enumerated()), id: \.element.id) { index, summary in
+                    TripStopTimelineCard(summary: summary, position: index + 1)
                 }
-                .frame(height: 180)
-                .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
             }
         }
     }
 
-    private var destinationLabel: String {
-        [trip.destinationName, trip.country]
-            .filter { !$0.isEmpty }
-            .joined(separator: " · ")
+    @ViewBuilder
+    private var mapCard: some View {
+        if !trip.mapStopSummaries.isEmpty {
+            SectionCard(title: "Map", subtitle: "Stops with saved coordinates") {
+                Map(initialPosition: .region(mapRegion), interactionModes: []) {
+                    ForEach(trip.mapStopSummaries) { summary in
+                        if let coordinate = coordinate(for: summary) {
+                            Marker(
+                                summary.locationLabel.isEmpty ? trip.title : summary.locationLabel,
+                                coordinate: coordinate
+                            )
+                            .tint(AppTheme.ColorToken.accent)
+                        }
+                    }
+                }
+                .frame(height: 220)
+                .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+            }
+        }
     }
 
     private var dateLabel: String {
@@ -212,6 +228,38 @@ struct TripDetailView: View {
         let start = formatter.string(from: trip.startDate)
         guard let end = trip.endDate, end > trip.startDate else { return start }
         return "\(start) – \(formatter.string(from: end))"
+    }
+
+    private var mapRegion: MKCoordinateRegion {
+        let coordinates = trip.mapStopSummaries.compactMap(coordinate(for:))
+
+        guard
+            let minLatitude = coordinates.map(\.latitude).min(),
+            let maxLatitude = coordinates.map(\.latitude).max(),
+            let minLongitude = coordinates.map(\.longitude).min(),
+            let maxLongitude = coordinates.map(\.longitude).max()
+        else {
+            return MKCoordinateRegion(
+                center: CLLocationCoordinate2D(latitude: 0, longitude: 0),
+                span: MKCoordinateSpan(latitudeDelta: 1, longitudeDelta: 1)
+            )
+        }
+
+        return MKCoordinateRegion(
+            center: CLLocationCoordinate2D(
+                latitude: (minLatitude + maxLatitude) / 2,
+                longitude: (minLongitude + maxLongitude) / 2
+            ),
+            span: MKCoordinateSpan(
+                latitudeDelta: max((maxLatitude - minLatitude) * 1.6, 0.35),
+                longitudeDelta: max((maxLongitude - minLongitude) * 1.6, 0.35)
+            )
+        )
+    }
+
+    private func coordinate(for summary: TripStopSummary) -> CLLocationCoordinate2D? {
+        guard let latitude = summary.latitude, let longitude = summary.longitude else { return nil }
+        return CLLocationCoordinate2D(latitude: latitude, longitude: longitude)
     }
 
     private func toggleFavorite() {

@@ -32,6 +32,12 @@ struct RootTabView: View {
 }
 
 #Preview {
-    RootTabView()
-        .modelContainer(for: Trip.self, inMemory: true)
+    let container = try! ModelContainer(
+        for: Trip.self,
+        TripStop.self,
+        configurations: ModelConfiguration(isStoredInMemoryOnly: true)
+    )
+
+    return RootTabView()
+        .modelContainer(container)
 }

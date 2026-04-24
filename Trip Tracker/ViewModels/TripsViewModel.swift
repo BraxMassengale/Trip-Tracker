@@ -58,12 +58,22 @@ final class TripsViewModel {
     func matches(_ trip: Trip) -> Bool {
         let query = searchQuery.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         if !query.isEmpty {
+            let stopHaystack = trip.stopSummaries
+                .map { summary in
+                    [
+                        summary.destinationName,
+                        summary.country,
+                        summary.notes ?? ""
+                    ]
+                    .joined(separator: " ")
+                }
+                .joined(separator: " ")
             let haystack = [
                 trip.title,
-                trip.destinationName,
-                trip.country,
+                trip.displayDestinationSummary,
                 trip.notes ?? "",
-                trip.tags.joined(separator: " ")
+                trip.tags.joined(separator: " "),
+                stopHaystack
             ]
             .joined(separator: " ")
             .lowercased()
@@ -81,7 +91,7 @@ final class TripsViewModel {
             let tripYear = cal.component(.year, from: trip.startDate)
             if tripYear != currentYear { return false }
         case .withPhotos:
-            if (trip.photos ?? []).isEmpty { return false }
+            if !trip.hasAnyPhotos { return false }
         }
 
         if !tagFilters.isEmpty {

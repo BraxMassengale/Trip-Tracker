@@ -5,7 +5,7 @@ import SwiftData
 struct Trip_TrackerApp: App {
     let modelContainer: ModelContainer = {
         do {
-            return try ModelContainer(for: Trip.self)
+            return try ModelContainer(for: Trip.self, TripStop.self)
         } catch {
             fatalError("Failed to create ModelContainer: \(error)")
         }

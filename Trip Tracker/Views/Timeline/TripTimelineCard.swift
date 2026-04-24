@@ -64,12 +64,12 @@ struct TripTimelineCard: View {
     }
 
     private var hasCover: Bool {
-        (trip.photos ?? []).first != nil
+        trip.previewPhotoData != nil
     }
 
     @ViewBuilder
     private var coverImage: some View {
-        if let first = (trip.photos ?? []).first, let image = UIImage(data: first) {
+        if let first = trip.previewPhotoData, let image = UIImage(data: first) {
             Image(uiImage: image)
                 .resizable()
                 .scaledToFill()
@@ -90,9 +90,7 @@ struct TripTimelineCard: View {
     }
 
     private var destinationLabel: String {
-        [trip.destinationName, trip.country]
-            .filter { !$0.isEmpty }
-            .joined(separator: " · ")
+        trip.displayDestinationSummary
     }
 
     private var dateLabel: String {
