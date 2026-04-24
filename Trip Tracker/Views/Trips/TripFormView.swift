@@ -120,8 +120,16 @@ struct TripFormView: View {
                 }
                 .listRowInsets(EdgeInsets(top: 8, leading: 0, bottom: 8, trailing: 0))
                 .listRowBackground(Color.clear)
+                .simultaneousGesture(
+                    LongPressGesture(minimumDuration: 0.35)
+                        .onEnded { _ in Haptics.impact(.light) }
+                )
             }
             .onMove(perform: moveStops)
+
+            if let warning = chronologyWarning {
+                chronologyBanner(message: warning)
+            }
 
             Button {
                 addStop()
@@ -132,13 +140,43 @@ struct TripFormView: View {
             Text("Stops")
         } footer: {
             if stops.count > 1 {
-                Text("Use Edit to reorder your stops.")
+                Text("Drag a stop to reorder, or tap Edit to move them.")
             } else if stops.contains(where: \.isIncomplete) {
                 Text("Each stop needs a location before it can be saved.")
             } else {
                 Text("Build this trip as an ordered set of places.")
             }
         }
+    }
+
+    private func chronologyBanner(message: String) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Label {
+                Text(message)
+                    .font(.footnote)
+                    .foregroundStyle(AppTheme.ColorToken.ink)
+            } icon: {
+                Image(systemName: "exclamationmark.triangle.fill")
+                    .foregroundStyle(.orange)
+            }
+
+            Button {
+                sortByDate()
+            } label: {
+                Label("Sort by date", systemImage: "arrow.up.arrow.down")
+                    .font(.footnote.weight(.semibold))
+            }
+            .buttonStyle(.bordered)
+            .controlSize(.small)
+        }
+        .padding(12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .fill(Color.orange.opacity(0.15))
+        )
+        .listRowInsets(EdgeInsets(top: 4, leading: 0, bottom: 4, trailing: 0))
+        .listRowBackground(Color.clear)
     }
 
     private var notesSection: some View {
@@ -276,11 +314,34 @@ struct TripFormView: View {
 
     private func moveStops(from source: IndexSet, to destination: Int) {
         stops.move(fromOffsets: source, toOffset: destination)
-        Haptics.selection()
+        Haptics.impact(.light)
+    }
+
+    private func sortByDate() {
+        let sorted = stops.sorted { $0.date < $1.date }
+        guard sorted.map(\.id) != stops.map(\.id) else { return }
+        stops = sorted
+        Haptics.impact(.light)
     }
 
     private func position(for stopID: UUID) -> Int {
         (stops.firstIndex { $0.id == stopID } ?? 0) + 1
+    }
+
+    private var chronologyWarning: String? {
+        guard stops.count > 1 else { return nil }
+        let formatter = DateFormatter()
+        formatter.dateFormat = "MMM d"
+        for index in 1..<stops.count {
+            let previous = stops[index - 1]
+            let current = stops[index]
+            if current.date < previous.date {
+                let currentDate = formatter.string(from: current.date)
+                let previousDate = formatter.string(from: previous.date)
+                return "Stop \(index + 1) (\(currentDate)) is now before Stop \(index) (\(previousDate))."
+            }
+        }
+        return nil
     }
 
     private func save() {
