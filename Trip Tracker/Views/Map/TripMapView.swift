@@ -1,12 +1,14 @@
 import SwiftUI
 import SwiftData
 import MapKit
+import UIKit
 
 struct TripMapView: View {
     @Query(sort: \Trip.startDate, order: .reverse) private var trips: [Trip]
 
     @State private var position: MapCameraPosition = .automatic
-    @State private var selectedStopID: String?
+    @State private var selectedPlaceID: String?
+    @State private var selectedCarouselTripID: String?
 
     var body: some View {
         NavigationStack {
@@ -18,7 +20,6 @@ struct TripMapView: View {
                 }
             }
             .background(AppTheme.ColorToken.canvas)
-            .navigationTitle("Map")
             .navigationDestination(for: Trip.self) { trip in
                 TripDetailView(trip: trip)
             }
@@ -30,22 +31,15 @@ struct TripMapView: View {
                 refreshCameraPosition()
                 pruneSelection()
             }
+            .onChange(of: selectedCarouselTripID) { _, _ in
+                Haptics.selection()
+            }
         }
     }
 
-    private var mapStops: [TripStopSummary] {
-        trips
-            .flatMap(\.mapStopSummaries)
-            .sorted { $0.occurredAt > $1.occurredAt }
-    }
-
-    private var selectedStop: TripStopSummary? {
-        guard let selectedStopID else { return nil }
-        return mapStops.first { $0.id == selectedStopID }
-    }
-
-    private var selectedTripID: String? {
-        selectedStop.map(tripID(for:))
+    private var selectedPlace: TripMapPlace? {
+        guard let selectedPlaceID else { return nil }
+        return mapPlaces.first { $0.id == selectedPlaceID }
     }
 
     private var coordinateSnapshot: String {
@@ -61,39 +55,38 @@ struct TripMapView: View {
             ForEach(routeSegments) { segment in
                 if segment.isFlight {
                     MapPolyline(segment.polyline)
-                        .stroke(segment.color.opacity(segment.dimmed ? 0.08 : 0.18), lineWidth: 8)
+                        .stroke(segment.color.opacity(segment.dimmed ? 0.05 : 0.20), lineWidth: segment.glowLineWidth)
                 }
 
                 MapPolyline(segment.polyline)
                     .stroke(
-                        segment.color.opacity(segment.dimmed ? 0.18 : 0.82),
+                        segment.color.opacity(segment.routeOpacity),
                         style: segment.strokeStyle
                     )
             }
 
-            ForEach(mapStops) { summary in
-                if let coordinate = coordinate(for: summary) {
-                    Annotation(annotationTitle(for: summary), coordinate: coordinate) {
-                        Button {
-                            select(summary)
-                        } label: {
-                            TripMapPin(
-                                isSelected: summary.id == selectedStopID,
-                                isFavorite: summary.trip.favorite
-                            )
-                        }
-                        .buttonStyle(.plain)
+            ForEach(mapPlaces) { place in
+                Annotation(place.title, coordinate: place.coordinate) {
+                    Button {
+                        select(place)
+                    } label: {
+                        TripMapPlacePin(
+                            count: place.visitCount,
+                            isSelected: place.id == selectedPlaceID,
+                            isDimmed: selectedPlaceID != nil && place.id != selectedPlaceID,
+                            isFavorite: place.containsFavoriteTrip,
+                            kind: place.primaryKind
+                        )
                     }
-                    .annotationTitles(.hidden)
-                }
-            }
-
-            ForEach(mapEndpoints) { location in
-                Annotation(endpointTitle(for: location), coordinate: location.location.coordinate) {
-                    TripEndpointMapPin(kind: location.kind, isReturn: location.kind == .end && location.trip.returnsToStart)
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(accessibilityLabel(for: place))
                 }
                 .annotationTitles(.hidden)
             }
+        }
+        .mapStyle(.standard(elevation: .realistic))
+        .safeAreaInset(edge: .top) {
+            mapSummaryBar
         }
         .safeAreaInset(edge: .bottom) {
             bottomCard
@@ -106,8 +99,24 @@ struct TripMapView: View {
             .sorted { $0.date > $1.date }
     }
 
-    private var mapEndpoints: [TripJourneyLocation] {
-        mapLocations.filter { $0.kind == .start || $0.kind == .end }
+    private var mapPlaces: [TripMapPlace] {
+        let groupedLocations = Dictionary(grouping: mapLocations) { location in
+            placeKey(for: location)
+        }
+
+        return groupedLocations.map { key, locations in
+            TripMapPlace(
+                id: key,
+                locations: locations,
+                tripID: { trip in tripID(for: trip) }
+            )
+        }
+        .sorted { first, second in
+            if first.lastVisited == second.lastVisited {
+                return first.title < second.title
+            }
+            return first.lastVisited > second.lastVisited
+        }
     }
 
     private var routeSegments: [TripRouteSegment] {
@@ -125,17 +134,22 @@ struct TripMapView: View {
         guard locations.count > 1 else { return [] }
 
         let color = routeColor(for: trip, fallbackIndex: tripIndex)
-        let currentTripID = tripID(for: trip)
-        let dimmed = selectedTripID.map { $0 != currentTripID } ?? false
 
         return zip(locations, locations.dropFirst()).map { start, end in
+            let startPlaceID = placeKey(for: start)
+            let endPlaceID = placeKey(for: end)
+            let touchesSelection = selectedPlaceID.map { selectedID in
+                startPlaceID == selectedID || endPlaceID == selectedID
+            } ?? false
+
             return TripRouteSegment(
                 id: "\(start.id)-to-\(end.id)",
                 start: start.location.coordinate,
                 end: end.location.coordinate,
                 mode: end.arrivalMode,
                 color: color,
-                dimmed: dimmed
+                dimmed: selectedPlaceID != nil && !touchesSelection,
+                highlighted: touchesSelection
             )
         }
     }
@@ -163,72 +177,167 @@ struct TripMapView: View {
 
     @ViewBuilder
     private var bottomCard: some View {
-        if let selectedStop {
-            NavigationLink(value: selectedStop.trip) {
-                SectionCard(
-                    title: selectedStop.trip.title,
-                    subtitle: selectedStop.locationLabel.isEmpty
-                        ? selectedStop.trip.displayDestinationSummary
-                        : selectedStop.locationLabel
-                ) {
-                    HStack(alignment: .center, spacing: 12) {
-                        VStack(alignment: .leading, spacing: 6) {
-                            Label(dateLabel(for: selectedStop), systemImage: "calendar")
-                                .font(.subheadline)
-                                .foregroundStyle(AppTheme.ColorToken.secondaryInk)
+        if let selectedPlace {
+            VStack(spacing: 12) {
+                Capsule()
+                    .fill(AppTheme.ColorToken.muted.opacity(0.55))
+                    .frame(width: 38, height: 5)
+                    .padding(.top, 8)
 
-                            Text("Open trip details")
-                                .font(.footnote.weight(.medium))
-                                .foregroundStyle(AppTheme.ColorToken.accent)
-                        }
+                HStack(alignment: .firstTextBaseline, spacing: 12) {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(selectedPlace.title)
+                            .font(.headline)
+                            .foregroundStyle(AppTheme.ColorToken.ink)
+                            .lineLimit(1)
 
-                        Spacer()
+                        Text(selectedPlace.summary)
+                            .font(.footnote)
+                            .foregroundStyle(AppTheme.ColorToken.secondaryInk)
+                    }
 
-                        Image(systemName: "chevron.right.circle.fill")
+                    Spacer()
+
+                    Button {
+                        clearSelection()
+                    } label: {
+                        Image(systemName: "xmark.circle.fill")
                             .font(.title3)
-                            .foregroundStyle(AppTheme.ColorToken.accent)
+                            .symbolRenderingMode(.hierarchical)
+                            .foregroundStyle(AppTheme.ColorToken.secondaryInk)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Close selected place")
+                }
+                .padding(.horizontal, 16)
+
+                TabView(selection: $selectedCarouselTripID) {
+                    ForEach(selectedPlace.trips) { trip in
+                        NavigationLink(value: trip) {
+                            TripMapTripCard(
+                                trip: trip,
+                                matchingLocations: selectedPlace.locations(for: trip) { trip in
+                                    tripID(for: trip)
+                                }
+                            )
+                        }
+                        .buttonStyle(.plain)
+                        .tag(tripID(for: trip) as String?)
                     }
                 }
+                .tabViewStyle(.page(indexDisplayMode: .never))
+                .frame(height: 218)
+
+                if selectedPlace.trips.count > 1 {
+                    TripMapPageIndicator(
+                        count: selectedPlace.trips.count,
+                        selectedIndex: selectedIndex(in: selectedPlace)
+                    )
+                    .padding(.top, -4)
+                }
             }
-            .buttonStyle(.plain)
+            .padding(.bottom, selectedPlace.trips.count > 1 ? 12 : 10)
+            .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 28, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: 28, style: .continuous)
+                    .stroke(AppTheme.ColorToken.cardBorder.opacity(0.65), lineWidth: 1)
+            )
+            .shadow(color: Color.black.opacity(0.12), radius: 18, x: 0, y: 8)
             .padding(.horizontal)
             .padding(.top, 12)
-            .padding(.bottom, 8)
-            .background(.clear)
+            .padding(.bottom, 6)
         } else {
-            SectionCard(
-                title: "Journey map",
-                subtitle: mapLocations.count == 1
-                    ? "1 place on the map"
-                    : "\(mapLocations.count) places on the map"
-            ) {
-                Text("Tap any stop pin to preview it and jump into the trip timeline.")
-                    .font(.subheadline)
-                    .foregroundStyle(AppTheme.ColorToken.secondaryInk)
+            HStack(spacing: 10) {
+                Image(systemName: "hand.tap")
+                    .font(.footnote.weight(.semibold))
+                    .foregroundStyle(AppTheme.ColorToken.accent)
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Journey map")
+                        .font(.footnote.weight(.semibold))
+                        .foregroundStyle(AppTheme.ColorToken.ink)
+
+                    Text("\(mapPlacesLabel) · tap markers to preview trips")
+                        .font(.caption)
+                        .foregroundStyle(AppTheme.ColorToken.secondaryInk)
+                        .lineLimit(1)
+                }
+
+                Spacer(minLength: 0)
             }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 10)
+            .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: 18, style: .continuous)
+                    .stroke(AppTheme.ColorToken.cardBorder.opacity(0.65), lineWidth: 1)
+            )
+            .shadow(color: Color.black.opacity(0.08), radius: 12, x: 0, y: 5)
             .padding(.horizontal)
-            .padding(.top, 12)
-            .padding(.bottom, 8)
-            .background(.clear)
+            .padding(.top, 8)
+            .padding(.bottom, 6)
         }
     }
 
-    private func select(_ summary: TripStopSummary) {
-        selectedStopID = summary.id
-        position = .region(region(focusingOn: summary))
+    private var mapSummaryBar: some View {
+        HStack(spacing: 10) {
+            MapSummaryMetric(value: "\(mapPlaces.count)", label: "Places")
+
+            Divider()
+                .frame(height: 20)
+
+            MapSummaryMetric(value: "\(tripsWithMappedLocationsCount)", label: "Trips")
+
+            Divider()
+                .frame(height: 20)
+
+            MapSummaryMetric(value: "\(routeSegments.count)", label: "Routes")
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 7)
+        .background(.regularMaterial, in: Capsule())
+        .overlay(
+            Capsule()
+                .stroke(AppTheme.ColorToken.cardBorder.opacity(0.65), lineWidth: 1)
+        )
+        .padding(.top, 0)
+    }
+
+    private var tripsWithMappedLocationsCount: Int {
+        Set(mapLocations.map { tripID(for: $0.trip) }).count
+    }
+
+    private var mapPlacesLabel: String {
+        mapPlaces.count == 1
+            ? "1 destination marker"
+            : "\(mapPlaces.count) destination markers"
+    }
+
+    private func select(_ place: TripMapPlace) {
+        selectedPlaceID = place.id
+        selectedCarouselTripID = place.trips.first.map { tripID(for: $0) }
+        position = .region(region(focusingOn: place))
+        Haptics.selection()
+    }
+
+    private func clearSelection() {
+        selectedPlaceID = nil
+        selectedCarouselTripID = nil
+        refreshCameraPosition()
         Haptics.selection()
     }
 
     private func pruneSelection() {
-        guard let selectedStopID else { return }
-        guard mapStops.contains(where: { $0.id == selectedStopID }) else {
-            self.selectedStopID = nil
+        guard let selectedPlaceID else { return }
+        guard mapPlaces.contains(where: { $0.id == selectedPlaceID }) else {
+            self.selectedPlaceID = nil
+            selectedCarouselTripID = nil
             return
         }
     }
 
     private func refreshCameraPosition() {
-        guard selectedStop == nil else { return }
+        guard selectedPlace == nil else { return }
         position = initialCameraPosition
     }
 
@@ -264,25 +373,29 @@ struct TripMapView: View {
         ))
     }
 
-    private func region(focusingOn summary: TripStopSummary) -> MKCoordinateRegion {
-        let center = coordinate(for: summary) ?? CLLocationCoordinate2D(latitude: 0, longitude: 0)
+    private func region(focusingOn place: TripMapPlace) -> MKCoordinateRegion {
+        let center = place.coordinate
         return MKCoordinateRegion(
             center: center,
-            span: MKCoordinateSpan(latitudeDelta: 0.3, longitudeDelta: 0.3)
+            span: MKCoordinateSpan(latitudeDelta: 0.22, longitudeDelta: 0.22)
         )
-    }
-
-    private func coordinate(for summary: TripStopSummary) -> CLLocationCoordinate2D? {
-        guard let latitude = summary.latitude, let longitude = summary.longitude else { return nil }
-        return CLLocationCoordinate2D(latitude: latitude, longitude: longitude)
-    }
-
-    private func tripID(for summary: TripStopSummary) -> String {
-        tripID(for: summary.trip)
     }
 
     private func tripID(for trip: Trip) -> String {
         String(describing: trip.persistentModelID)
+    }
+
+    private func placeKey(for location: TripJourneyLocation) -> String {
+        let label = location.location.locationLabel
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .lowercased()
+        let roundedLatitude = (location.location.latitude * 100).rounded() / 100
+        let roundedLongitude = (location.location.longitude * 100).rounded() / 100
+
+        if label.isEmpty {
+            return "\(roundedLatitude),\(roundedLongitude)"
+        }
+        return "\(label)|\(roundedLatitude),\(roundedLongitude)"
     }
 
     private func routeColor(for trip: Trip, fallbackIndex: Int) -> Color {
@@ -294,32 +407,14 @@ struct TripMapView: View {
         return Self.routePalette[index]
     }
 
-    private func annotationTitle(for summary: TripStopSummary) -> String {
-        summary.locationLabel.isEmpty ? summary.trip.title : summary.locationLabel
+    private func accessibilityLabel(for place: TripMapPlace) -> String {
+        "\(place.title), \(place.summary)"
     }
 
-    private func endpointTitle(for location: TripJourneyLocation) -> String {
-        switch location.kind {
-        case .start:
-            return "Start: \(location.location.shortLabel)"
-        case .end:
-            return location.trip.returnsToStart
-                ? "Back home: \(location.location.shortLabel)"
-                : "End: \(location.location.shortLabel)"
-        case .stop:
-            return location.location.shortLabel
-        }
+    private func selectedIndex(in place: TripMapPlace) -> Int {
+        guard let selectedCarouselTripID else { return 0 }
+        return place.trips.firstIndex { tripID(for: $0) == selectedCarouselTripID } ?? 0
     }
-
-    private func dateLabel(for summary: TripStopSummary) -> String {
-        return Self.dateFormatter.string(from: summary.occurredAt)
-    }
-
-    private static let dateFormatter: DateFormatter = {
-        let formatter = DateFormatter()
-        formatter.dateStyle = .medium
-        return formatter
-    }()
 
     private static let routePalette: [Color] = [
         AppTheme.ColorToken.accent,
@@ -339,6 +434,7 @@ private struct TripRouteSegment: Identifiable {
     let mode: TransportMode?
     let color: Color
     let dimmed: Bool
+    let highlighted: Bool
 
     var polyline: MKGeodesicPolyline {
         var coordinates = [start, end]
@@ -349,27 +445,160 @@ private struct TripRouteSegment: Identifiable {
         mode == .flight
     }
 
+    var routeOpacity: Double {
+        if dimmed {
+            return 0.16
+        }
+        return highlighted ? 0.98 : 0.78
+    }
+
+    var glowLineWidth: CGFloat {
+        highlighted ? 12 : 8
+    }
+
     var strokeStyle: StrokeStyle {
+        let width: CGFloat = highlighted ? 5.5 : 4
+
         switch mode {
         case .flight:
-            StrokeStyle(lineWidth: 4, lineCap: .round, lineJoin: .round, dash: [9, 7])
+            return StrokeStyle(lineWidth: width, lineCap: .round, lineJoin: .round, dash: [9, 7])
         case .train:
-            StrokeStyle(lineWidth: 4, lineCap: .round, lineJoin: .round, dash: [12, 4, 2, 4])
+            return StrokeStyle(lineWidth: width, lineCap: .round, lineJoin: .round, dash: [12, 4, 2, 4])
         case .car, .bus:
-            StrokeStyle(lineWidth: 4, lineCap: .round, lineJoin: .round)
+            return StrokeStyle(lineWidth: width, lineCap: .round, lineJoin: .round)
         case .ferry:
-            StrokeStyle(lineWidth: 4, lineCap: .round, lineJoin: .round, dash: [2, 7])
+            return StrokeStyle(lineWidth: width, lineCap: .round, lineJoin: .round, dash: [2, 7])
         case .walk, .bike:
-            StrokeStyle(lineWidth: 2.5, lineCap: .round, lineJoin: .round, dash: [1, 6])
+            return StrokeStyle(lineWidth: highlighted ? 4 : 2.5, lineCap: .round, lineJoin: .round, dash: [1, 6])
         case .other, nil:
-            StrokeStyle(lineWidth: 2.5, lineCap: .round, lineJoin: .round, dash: [6, 6])
+            return StrokeStyle(lineWidth: highlighted ? 4 : 2.5, lineCap: .round, lineJoin: .round, dash: [6, 6])
         }
     }
 }
 
-private struct TripMapPin: View {
+private struct TripMapPlace: Identifiable {
+    let id: String
+    let locations: [TripJourneyLocation]
+    let tripID: (Trip) -> String
+
+    var coordinate: CLLocationCoordinate2D {
+        CLLocationCoordinate2D(
+            latitude: locations.map(\.location.latitude).average,
+            longitude: locations.map(\.location.longitude).average
+        )
+    }
+
+    var title: String {
+        let labels = orderedUnique(locations.map(\.location.shortLabel))
+        if labels.count == 1 {
+            return labels[0]
+        }
+        return "\(labels.count) nearby places"
+    }
+
+    var summary: String {
+        let tripText = trips.count == 1 ? "1 trip" : "\(trips.count) trips"
+        let visitText = visitCount == 1 ? "1 visit" : "\(visitCount) visits"
+        return "\(tripText) · \(visitText)"
+    }
+
+    var visitCount: Int {
+        locations.count
+    }
+
+    var lastVisited: Date {
+        locations.map(\.date).max() ?? .distantPast
+    }
+
+    var trips: [Trip] {
+        var seen: Set<String> = []
+        return locations
+            .sorted { $0.date > $1.date }
+            .compactMap { location in
+                let id = tripID(location.trip)
+                guard seen.insert(id).inserted else { return nil }
+                return location.trip
+            }
+    }
+
+    var containsFavoriteTrip: Bool {
+        trips.contains { $0.favorite }
+    }
+
+    var primaryKind: TripJourneyLocationKind {
+        if locations.contains(where: { $0.kind == .stop }) {
+            return .stop
+        }
+        if locations.contains(where: { $0.kind == .end }) {
+            return .end
+        }
+        return .start
+    }
+
+    func locations(for trip: Trip, tripID: (Trip) -> String) -> [TripJourneyLocation] {
+        let id = tripID(trip)
+        return locations.filter { tripID($0.trip) == id }
+    }
+
+    private func orderedUnique(_ values: [String]) -> [String] {
+        var seen: Set<String> = []
+        var result: [String] = []
+
+        for value in values {
+            let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !trimmed.isEmpty else { continue }
+            guard seen.insert(trimmed.lowercased()).inserted else { continue }
+            result.append(trimmed)
+        }
+
+        return result
+    }
+}
+
+private struct MapSummaryMetric: View {
+    let value: String
+    let label: String
+
+    var body: some View {
+        VStack(spacing: 1) {
+            Text(value)
+                .font(.footnote.weight(.semibold))
+                .foregroundStyle(AppTheme.ColorToken.ink)
+                .monospacedDigit()
+            Text(label)
+                .font(.caption2.weight(.medium))
+                .foregroundStyle(AppTheme.ColorToken.secondaryInk)
+        }
+        .frame(minWidth: 44)
+    }
+}
+
+private struct TripMapPageIndicator: View {
+    let count: Int
+    let selectedIndex: Int
+
+    var body: some View {
+        HStack(spacing: 6) {
+            ForEach(0..<count, id: \.self) { index in
+                Capsule()
+                    .fill(index == selectedIndex
+                        ? AppTheme.ColorToken.accent
+                        : AppTheme.ColorToken.secondaryInk.opacity(0.28))
+                    .frame(width: index == selectedIndex ? 18 : 6, height: 6)
+            }
+        }
+        .frame(maxWidth: .infinity)
+        .animation(.spring(response: 0.24, dampingFraction: 0.85), value: selectedIndex)
+        .accessibilityLabel("Trip \(selectedIndex + 1) of \(count)")
+    }
+}
+
+private struct TripMapPlacePin: View {
+    let count: Int
     let isSelected: Bool
+    let isDimmed: Bool
     let isFavorite: Bool
+    let kind: TripJourneyLocationKind
 
     var body: some View {
         VStack(spacing: 0) {
@@ -382,9 +611,19 @@ private struct TripMapPin: View {
                     .stroke(AppTheme.ColorToken.cardBorder, lineWidth: 1)
                     .frame(width: 38, height: 38)
 
-                Image(systemName: isFavorite ? "heart.fill" : "mappin")
+                Image(systemName: symbolName)
                     .font(.footnote.weight(.bold))
                     .foregroundStyle(isSelected ? AppTheme.ColorToken.cardFill : AppTheme.ColorToken.accent)
+
+                if count > 1 {
+                    Text("\(min(count, 99))")
+                        .font(.system(size: 10, weight: .bold, design: .rounded))
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 5)
+                        .padding(.vertical, 2)
+                        .background(AppTheme.ColorToken.routeRose, in: Capsule())
+                        .offset(x: 16, y: -15)
+                }
             }
 
             Triangle()
@@ -396,54 +635,182 @@ private struct TripMapPin: View {
                 }
                 .offset(y: -1)
         }
+        .opacity(isDimmed ? 0.32 : 1)
         .shadow(color: Color.black.opacity(isSelected ? 0.18 : 0.10), radius: 10, x: 0, y: 4)
         .scaleEffect(isSelected ? 1.08 : 1.0)
         .animation(.spring(response: 0.22, dampingFraction: 0.8), value: isSelected)
-    }
-}
-
-private struct TripEndpointMapPin: View {
-    let kind: TripJourneyLocationKind
-    let isReturn: Bool
-
-    var body: some View {
-        ZStack {
-            Circle()
-                .fill(AppTheme.ColorToken.cardFill)
-                .frame(width: 34, height: 34)
-
-            Circle()
-                .stroke(AppTheme.ColorToken.accent, lineWidth: 2)
-                .frame(width: 34, height: 34)
-
-            Image(systemName: symbolName)
-                .font(.footnote.weight(.bold))
-                .foregroundStyle(AppTheme.ColorToken.accent)
-        }
-        .shadow(color: Color.black.opacity(0.10), radius: 8, x: 0, y: 3)
-        .accessibilityLabel(accessibilityLabel)
+        .animation(.easeInOut(duration: 0.18), value: isDimmed)
     }
 
     private var symbolName: String {
+        if isFavorite {
+            return "heart.fill"
+        }
+
         switch kind {
         case .start:
-            "house.fill"
+            return "house.fill"
         case .end:
-            isReturn ? "arrow.uturn.left" : "flag.checkered"
+            return "flag.checkered"
         case .stop:
-            "mappin"
+            return "mappin"
+        }
+    }
+}
+
+private struct TripMapTripCard: View {
+    let trip: Trip
+    let matchingLocations: [TripJourneyLocation]
+
+    var body: some View {
+        HStack(spacing: 14) {
+            hero
+
+            VStack(alignment: .leading, spacing: 10) {
+                VStack(alignment: .leading, spacing: 4) {
+                    HStack(spacing: 6) {
+                        Text(trip.title)
+                            .font(.headline)
+                            .foregroundStyle(AppTheme.ColorToken.ink)
+                            .lineLimit(2)
+
+                        if trip.favorite {
+                            Image(systemName: "heart.fill")
+                                .font(.caption.weight(.semibold))
+                                .foregroundStyle(AppTheme.ColorToken.accent)
+                        }
+                    }
+
+                    Text(trip.displayDestinationSummary)
+                        .font(.subheadline)
+                        .foregroundStyle(AppTheme.ColorToken.secondaryInk)
+                        .lineLimit(2)
+                }
+
+                HStack(spacing: 8) {
+                    Label(dateLabel, systemImage: "calendar")
+                    Label(matchLabel, systemImage: "mappin.and.ellipse")
+                }
+                .font(.caption.weight(.medium))
+                .foregroundStyle(AppTheme.ColorToken.secondaryInk)
+                .lineLimit(1)
+
+                transportChain
+
+                HStack {
+                    Text("Open trip")
+                        .font(.footnote.weight(.semibold))
+                        .foregroundStyle(AppTheme.ColorToken.accent)
+
+                    Image(systemName: "chevron.right")
+                        .font(.caption.weight(.bold))
+                        .foregroundStyle(AppTheme.ColorToken.accent)
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .padding(14)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
+        .background(AppTheme.ColorToken.cardFill, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 22, style: .continuous)
+                .stroke(AppTheme.ColorToken.cardBorder, lineWidth: 1)
+        )
+        .padding(.horizontal, 16)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(trip.title), \(trip.displayDestinationSummary), \(dateLabel)")
+    }
+
+    @ViewBuilder
+    private var hero: some View {
+        if let data = trip.previewPhotoData, let image = UIImage(data: data) {
+            Image(uiImage: image)
+                .resizable()
+                .scaledToFill()
+                .frame(width: 108, height: 142)
+                .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+                .overlay(alignment: .topTrailing) {
+                    if trip.favorite {
+                        Image(systemName: "heart.fill")
+                            .font(.caption.weight(.bold))
+                            .foregroundStyle(.white)
+                            .padding(7)
+                            .background(.ultraThinMaterial, in: Circle())
+                            .padding(8)
+                    }
+                }
+        } else {
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .fill(AppTheme.ColorToken.accentSoft)
+                .frame(width: 108, height: 142)
+                .overlay {
+                    VStack(spacing: 8) {
+                        Image(systemName: "map")
+                            .font(.title2.weight(.semibold))
+                        Text("Trip")
+                            .font(.caption.weight(.semibold))
+                    }
+                    .foregroundStyle(AppTheme.ColorToken.accent)
+                }
         }
     }
 
-    private var accessibilityLabel: String {
-        switch kind {
-        case .start:
-            "Trip start"
-        case .end:
-            isReturn ? "Return destination" : "Trip end"
-        case .stop:
-            "Trip stop"
+    private var transportChain: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 6) {
+                ForEach(Array(trip.journeyLocations.enumerated()), id: \.element.id) { index, location in
+                    if index > 0 {
+                        Image(systemName: location.arrivalMode?.symbolName ?? "arrow.right")
+                            .font(.caption2.weight(.bold))
+                            .foregroundStyle(AppTheme.ColorToken.accent)
+                    }
+
+                    Text(transportLabel(for: location, index: index))
+                        .font(.caption.weight(.medium))
+                        .foregroundStyle(AppTheme.ColorToken.ink)
+                        .lineLimit(1)
+                }
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 7)
         }
+        .background(AppTheme.ColorToken.canvas, in: Capsule())
+    }
+
+    private var dateLabel: String {
+        let start = Self.dateFormatter.string(from: trip.startDate)
+        guard let end = trip.endDate, end > trip.startDate else { return start }
+        return "\(start) - \(Self.dateFormatter.string(from: end))"
+    }
+
+    private var matchLabel: String {
+        let count = matchingLocations.count
+        return count == 1 ? "1 match" : "\(count) matches"
+    }
+
+    private func transportLabel(for location: TripJourneyLocation, index: Int) -> String {
+        switch location.kind {
+        case .start:
+            return "Start"
+        case .end:
+            return trip.returnsToStart ? "Back" : "End"
+        case .stop:
+            let label = location.location.shortLabel
+            return label == "Location" ? "Stop \(index + 1)" : label
+        }
+    }
+
+    private static let dateFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.dateStyle = .medium
+        return formatter
+    }()
+}
+
+private extension Array where Element == Double {
+    var average: Double {
+        guard !isEmpty else { return 0 }
+        return reduce(0, +) / Double(count)
     }
 }
 
