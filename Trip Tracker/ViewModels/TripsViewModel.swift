@@ -43,12 +43,14 @@ final class TripsViewModel {
     var filter: TripFilter = .all
     var tagFilters: Set<String> = []
     var companionFilters: Set<String> = []
+    var countryFilter: String? = nil
 
     var hasActiveFilters: Bool {
         !searchQuery.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         || filter != .all
         || !tagFilters.isEmpty
         || !companionFilters.isEmpty
+        || countryFilter != nil
     }
 
     func clearAll() {
@@ -56,6 +58,12 @@ final class TripsViewModel {
         filter = .all
         tagFilters = []
         companionFilters = []
+        countryFilter = nil
+    }
+
+    func setCountryFilter(_ countryName: String?) {
+        let trimmed = countryName?.trimmingCharacters(in: .whitespacesAndNewlines)
+        countryFilter = (trimmed?.isEmpty ?? true) ? nil : trimmed
     }
 
     func matches(_ trip: Trip) -> Bool {
@@ -109,6 +117,21 @@ final class TripsViewModel {
             let tripCompanions = Set(trip.companions.map { $0.lowercased() })
             let required = Set(companionFilters.map { $0.lowercased() })
             if !required.isSubset(of: tripCompanions) { return false }
+        }
+
+        if let countryFilter, !countryFilter.isEmpty {
+            let target = CountryFlag.isoCode(forCountryName: countryFilter)
+            let tripCountries = trip.countryValues
+            let matched = tripCountries.contains { value in
+                if value.localizedCaseInsensitiveCompare(countryFilter) == .orderedSame {
+                    return true
+                }
+                if let target, let valueISO = CountryFlag.isoCode(forCountryName: value) {
+                    return target == valueISO
+                }
+                return false
+            }
+            if !matched { return false }
         }
 
         return true

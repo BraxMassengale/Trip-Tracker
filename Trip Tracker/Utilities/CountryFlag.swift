@@ -2,39 +2,23 @@ import Foundation
 
 enum CountryFlag {
     static func emoji(for rawCountry: String) -> String? {
+        guard let iso = isoCode(forCountryName: rawCountry) else { return nil }
+        return flag(forISO: iso)
+    }
+
+    static func isoCode(forCountryName rawCountry: String) -> String? {
         let trimmed = rawCountry.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return nil }
 
-        if let code = isoCode(forInput: trimmed) {
-            return flag(for: code)
+        if let direct = directISO(forInput: trimmed) {
+            return direct
         }
 
         let normalized = normalize(trimmed)
-        if let code = lookup[normalized] {
-            return flag(for: code)
-        }
-
-        if let code = Locale.Region.isoRegions
-            .first(where: { region in
-                let identifier = region.identifier
-                let localized = Locale(identifier: "en_US").localizedString(forRegionCode: identifier) ?? ""
-                return normalize(localized) == normalized
-            })?
-            .identifier {
-            return flag(for: code)
-        }
-
-        return nil
+        return lookup[normalized]
     }
 
-    private static func isoCode(forInput value: String) -> String? {
-        guard value.count == 2 else { return nil }
-        let upper = value.uppercased()
-        guard upper.allSatisfy({ ("A"..."Z").contains($0) }) else { return nil }
-        return upper
-    }
-
-    private static func flag(for isoCode: String) -> String? {
+    static func flag(forISO isoCode: String) -> String? {
         let upper = isoCode.uppercased()
         guard upper.count == 2 else { return nil }
         var scalarString = ""
@@ -43,6 +27,13 @@ enum CountryFlag {
             scalarString.unicodeScalars.append(scalar)
         }
         return scalarString.isEmpty ? nil : scalarString
+    }
+
+    private static func directISO(forInput value: String) -> String? {
+        guard value.count == 2 else { return nil }
+        let upper = value.uppercased()
+        guard upper.allSatisfy({ ("A"..."Z").contains($0) }) else { return nil }
+        return upper
     }
 
     private static func normalize(_ value: String) -> String {

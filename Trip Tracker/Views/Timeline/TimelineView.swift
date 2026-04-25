@@ -43,6 +43,17 @@ struct TimelineView: View {
         ZStack(alignment: .topLeading) {
             spine(dimmed: group.trips.isEmpty)
 
+            Text(String(group.year))
+                .font(.system(size: 168, weight: .bold, design: .rounded))
+                .foregroundStyle(AppTheme.ColorToken.ink.opacity(0.10))
+                .lineLimit(1)
+                .minimumScaleFactor(0.5)
+                .padding(.leading, cardLeading - 12)
+                .padding(.trailing, 8)
+                .padding(.top, -10)
+                .accessibilityHidden(true)
+                .allowsHitTesting(false)
+
             VStack(alignment: .leading, spacing: 24) {
                 if group.trips.isEmpty {
                     emptyYearMarker
@@ -113,32 +124,27 @@ struct TimelineView: View {
     }
 
     private func yearHeader(for group: YearGroup) -> some View {
-        ZStack(alignment: .leading) {
+        HStack(alignment: .center, spacing: 12) {
+            Text(String(group.year))
+                .font(.title2.weight(.semibold))
+                .foregroundStyle(AppTheme.ColorToken.ink)
+            statChip(for: group)
+            Spacer(minLength: 0)
+        }
+        .padding(.leading, cardLeading)
+        .padding(.trailing, 20)
+        .padding(.vertical, 10)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
             Rectangle()
                 .fill(AppTheme.ColorToken.canvas)
-                .frame(maxWidth: .infinity)
-
-            Text(String(group.year))
-                .font(.system(size: 96, weight: .bold, design: .rounded))
-                .foregroundStyle(AppTheme.ColorToken.ink.opacity(0.13))
-                .lineLimit(1)
-                .minimumScaleFactor(0.6)
-                .padding(.leading, cardLeading - 8)
-                .padding(.trailing, 12)
-                .accessibilityHidden(true)
-
-            VStack(alignment: .leading, spacing: 6) {
-                Text(String(group.year))
-                    .font(.title2.weight(.semibold))
-                    .foregroundStyle(AppTheme.ColorToken.ink)
-                statChip(for: group)
-            }
-            .padding(.leading, cardLeading)
-            .padding(.trailing, 20)
-            .padding(.top, 14)
-            .padding(.bottom, 10)
+                .ignoresSafeArea(edges: .horizontal)
+        )
+        .overlay(alignment: .bottom) {
+            Rectangle()
+                .fill(AppTheme.ColorToken.cardBorder.opacity(0.4))
+                .frame(height: 0.5)
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     @ViewBuilder

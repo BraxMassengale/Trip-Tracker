@@ -74,6 +74,17 @@ struct TripsListView: View {
     private var filterBar: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 8) {
+                if let countryFilter = vm.countryFilter {
+                    FilterChip(
+                        label: countryFilterChipLabel(countryFilter),
+                        isSelected: true,
+                        showsClear: true
+                    ) {
+                        vm.setCountryFilter(nil)
+                        Haptics.selection()
+                    }
+                }
+
                 ForEach(TripFilter.allCases) { option in
                     FilterChip(
                         label: option.label,
@@ -99,6 +110,13 @@ struct TripsListView: View {
                 }
             }
         }
+    }
+
+    private func countryFilterChipLabel(_ countryFilter: String) -> String {
+        if let flag = CountryFlag.emoji(for: countryFilter) {
+            return "\(flag) \(countryFilter)"
+        }
+        return "Country: \(countryFilter)"
     }
 
     private var companionOptions: [String] {
@@ -207,22 +225,29 @@ struct TripsListView: View {
 private struct FilterChip: View {
     let label: String
     let isSelected: Bool
+    var showsClear: Bool = false
     let action: () -> Void
 
     var body: some View {
         Button(action: action) {
-            Text(label)
-                .font(.footnote.weight(.medium))
-                .foregroundStyle(isSelected
-                    ? AppTheme.ColorToken.cardFill
-                    : AppTheme.ColorToken.ink)
-                .padding(.horizontal, 12)
-                .padding(.vertical, 6)
-                .background(
-                    Capsule().fill(isSelected
-                        ? AppTheme.ColorToken.accent
-                        : AppTheme.ColorToken.accentSoft)
-                )
+            HStack(spacing: 6) {
+                Text(label)
+                    .font(.footnote.weight(.medium))
+                if showsClear {
+                    Image(systemName: "xmark.circle.fill")
+                        .font(.footnote)
+                }
+            }
+            .foregroundStyle(isSelected
+                ? AppTheme.ColorToken.cardFill
+                : AppTheme.ColorToken.ink)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 6)
+            .background(
+                Capsule().fill(isSelected
+                    ? AppTheme.ColorToken.accent
+                    : AppTheme.ColorToken.accentSoft)
+            )
         }
         .buttonStyle(.plain)
     }
