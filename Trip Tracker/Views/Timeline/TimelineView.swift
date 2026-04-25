@@ -4,6 +4,9 @@ import SwiftData
 struct TimelineView: View {
     @Query(sort: \Trip.startDate, order: .reverse) private var trips: [Trip]
 
+    private let spineLeading: CGFloat = 28
+    private let cardLeading: CGFloat = 64
+
     var body: some View {
         NavigationStack {
             Group {
@@ -23,61 +26,190 @@ struct TimelineView: View {
 
     private var timelineScroll: some View {
         ScrollView {
-            LazyVStack(alignment: .leading, spacing: 24, pinnedViews: [.sectionHeaders]) {
-                ForEach(groupedByYear, id: \.year) { group in
+            LazyVStack(alignment: .leading, spacing: 0, pinnedViews: [.sectionHeaders]) {
+                ForEach(yearGroups, id: \.year) { group in
                     Section {
-                        VStack(spacing: 16) {
-                            ForEach(group.trips) { trip in
-                                NavigationLink(value: trip) {
-                                    TripTimelineCard(trip: trip)
-                                }
-                                .buttonStyle(.plain)
-                            }
-                        }
+                        yearBody(for: group)
                     } header: {
                         yearHeader(for: group)
                     }
                 }
             }
-            .padding(.horizontal)
-            .padding(.bottom, 32)
+            .padding(.bottom, 48)
+        }
+    }
+
+    private func yearBody(for group: YearGroup) -> some View {
+        ZStack(alignment: .topLeading) {
+            spine(dimmed: group.trips.isEmpty)
+
+            VStack(alignment: .leading, spacing: 24) {
+                if group.trips.isEmpty {
+                    emptyYearMarker
+                } else {
+                    ForEach(group.trips) { trip in
+                        tripRow(for: trip)
+                    }
+                }
+            }
+            .padding(.leading, cardLeading)
+            .padding(.trailing, 20)
+            .padding(.top, 8)
+            .padding(.bottom, 28)
+        }
+    }
+
+    private func spine(dimmed: Bool) -> some View {
+        let baseOpacity = dimmed ? 0.18 : 0.55
+        let trailOpacity = dimmed ? 0.08 : 0.25
+
+        return LinearGradient(
+            colors: [
+                AppTheme.ColorToken.accent.opacity(baseOpacity),
+                AppTheme.ColorToken.accent.opacity(trailOpacity)
+            ],
+            startPoint: .top,
+            endPoint: .bottom
+        )
+        .frame(width: 2)
+        .padding(.leading, spineLeading)
+        .frame(maxHeight: .infinity, alignment: .top)
+    }
+
+    private func tripRow(for trip: Trip) -> some View {
+        ZStack(alignment: .topLeading) {
+            spineMarker
+                .offset(x: spineLeading - 6, y: 16)
+
+            NavigationLink(value: trip) {
+                TripTimelineCard(trip: trip)
+            }
+            .buttonStyle(.plain)
+        }
+    }
+
+    private var spineMarker: some View {
+        ZStack {
+            Circle()
+                .fill(AppTheme.ColorToken.canvas)
+                .frame(width: 14, height: 14)
+            Circle()
+                .stroke(AppTheme.ColorToken.accent, lineWidth: 2)
+                .frame(width: 14, height: 14)
+            Circle()
+                .fill(AppTheme.ColorToken.accent)
+                .frame(width: 6, height: 6)
+        }
+    }
+
+    private var emptyYearMarker: some View {
+        HStack(spacing: 12) {
+            Text("No trips this year")
+                .font(.footnote.italic())
+                .foregroundStyle(AppTheme.ColorToken.secondaryInk.opacity(0.7))
+            Spacer(minLength: 0)
+        }
+        .padding(.vertical, 4)
+    }
+
+    private func yearHeader(for group: YearGroup) -> some View {
+        ZStack(alignment: .leading) {
+            Rectangle()
+                .fill(AppTheme.ColorToken.canvas)
+                .frame(maxWidth: .infinity)
+
+            Text(String(group.year))
+                .font(.system(size: 96, weight: .bold, design: .rounded))
+                .foregroundStyle(AppTheme.ColorToken.ink.opacity(0.13))
+                .lineLimit(1)
+                .minimumScaleFactor(0.6)
+                .padding(.leading, cardLeading - 8)
+                .padding(.trailing, 12)
+                .accessibilityHidden(true)
+
+            VStack(alignment: .leading, spacing: 6) {
+                Text(String(group.year))
+                    .font(.title2.weight(.semibold))
+                    .foregroundStyle(AppTheme.ColorToken.ink)
+                statChip(for: group)
+            }
+            .padding(.leading, cardLeading)
+            .padding(.trailing, 20)
+            .padding(.top, 14)
+            .padding(.bottom, 10)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    @ViewBuilder
+    private func statChip(for group: YearGroup) -> some View {
+        if group.trips.isEmpty {
+            Text("Quiet year")
+                .font(.caption.weight(.medium))
+                .foregroundStyle(AppTheme.ColorToken.secondaryInk)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 4)
+                .background(Capsule().fill(AppTheme.ColorToken.cardFill))
+                .overlay(Capsule().stroke(AppTheme.ColorToken.cardBorder, lineWidth: 1))
+        } else {
+            Text(group.statSummary)
+                .font(.caption.weight(.medium))
+                .foregroundStyle(AppTheme.ColorToken.accent)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 4)
+                .background(Capsule().fill(AppTheme.ColorToken.accentSoft))
         }
     }
 
     private struct YearGroup {
         let year: Int
         let trips: [Trip]
+
+        var statSummary: String {
+            let tripsLabel = trips.count == 1 ? "1 trip" : "\(trips.count) trips"
+
+            var countries: Set<String> = []
+            for trip in trips {
+                for value in trip.countryValues {
+                    countries.insert(value.lowercased())
+                }
+            }
+            let countriesLabel = countries.count == 1 ? "1 country" : "\(countries.count) countries"
+
+            let calendar = Calendar.current
+            var travelDays = 0
+            for trip in trips {
+                let start = calendar.startOfDay(for: trip.startDate)
+                let end = calendar.startOfDay(for: trip.endDate ?? trip.startDate)
+                let days = (calendar.dateComponents([.day], from: start, to: end).day ?? 0) + 1
+                travelDays += max(1, days)
+            }
+            let daysLabel = travelDays == 1 ? "1 travel day" : "\(travelDays) travel days"
+
+            if countries.isEmpty {
+                return "\(tripsLabel) · \(daysLabel)"
+            }
+            return "\(tripsLabel) · \(countriesLabel) · \(daysLabel)"
+        }
     }
 
-    private var groupedByYear: [YearGroup] {
+    private var yearGroups: [YearGroup] {
         let calendar = Calendar.current
         let buckets = Dictionary(grouping: trips) { trip in
             calendar.component(.year, from: trip.startDate)
         }
-        return buckets
-            .map { entry in
-                YearGroup(
-                    year: entry.key,
-                    trips: entry.value.sorted { $0.startDate > $1.startDate }
-                )
-            }
-            .sorted { $0.year > $1.year }
-    }
 
-    private func yearHeader(for group: YearGroup) -> some View {
-        HStack(alignment: .firstTextBaseline, spacing: 10) {
-            Text(String(group.year))
-                .font(.largeTitle.weight(.bold))
-                .foregroundStyle(AppTheme.ColorToken.ink)
-            Text(group.trips.count == 1 ? "1 trip" : "\(group.trips.count) trips")
-                .font(.subheadline)
-                .foregroundStyle(AppTheme.ColorToken.secondaryInk)
-            Spacer()
+        guard let earliestYear = buckets.keys.min(),
+              let latestYear = buckets.keys.max() else {
+            return []
         }
-        .padding(.vertical, 10)
-        .padding(.horizontal, 4)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(AppTheme.ColorToken.canvas)
+
+        var groups: [YearGroup] = []
+        for year in (earliestYear...latestYear).reversed() {
+            let trips = (buckets[year] ?? []).sorted { $0.startDate > $1.startDate }
+            groups.append(YearGroup(year: year, trips: trips))
+        }
+        return groups
     }
 
     private var emptyState: some View {
