@@ -21,11 +21,14 @@ struct TripTimelineCard: View {
     @ViewBuilder
     private var heroPhoto: some View {
         if let data = trip.previewPhotoData, let image = UIImage(data: data) {
-            Image(uiImage: image)
-                .resizable()
-                .scaledToFill()
-                .aspectRatio(16/9, contentMode: .fill)
+            Color.clear
+                .aspectRatio(16/9, contentMode: .fit)
                 .frame(maxWidth: .infinity)
+                .overlay {
+                    Image(uiImage: image)
+                        .resizable()
+                        .scaledToFill()
+                }
                 .clipped()
                 .overlay(alignment: .bottomLeading) {
                     LinearGradient(
