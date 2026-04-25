@@ -3,7 +3,8 @@ import SwiftUI
 
 enum Continent: String, CaseIterable, Identifiable, Hashable {
     case africa
-    case americas
+    case northAmerica
+    case southAmerica
     case asia
     case europe
     case oceania
@@ -14,7 +15,8 @@ enum Continent: String, CaseIterable, Identifiable, Hashable {
     var label: String {
         switch self {
         case .africa: "Africa"
-        case .americas: "Americas"
+        case .northAmerica: "North America"
+        case .southAmerica: "South America"
         case .asia: "Asia"
         case .europe: "Europe"
         case .oceania: "Oceania"
@@ -25,10 +27,11 @@ enum Continent: String, CaseIterable, Identifiable, Hashable {
     var color: Color {
         switch self {
         case .africa: AppTheme.ColorToken.routeGold
-        case .americas: AppTheme.ColorToken.routeBlue
+        case .northAmerica: AppTheme.ColorToken.routeBlue
+        case .southAmerica: AppTheme.ColorToken.positive
         case .asia: AppTheme.ColorToken.routeRose
         case .europe: AppTheme.ColorToken.routeViolet
-        case .oceania: AppTheme.ColorToken.positive
+        case .oceania: AppTheme.ColorToken.routeGold
         case .antarctica: AppTheme.ColorToken.routeSlate
         }
     }
@@ -85,17 +88,22 @@ enum CountryCatalog {
         "ZA": .africa, "SS": .africa, "SD": .africa, "TZ": .africa, "TG": .africa, "TN": .africa,
         "UG": .africa, "EH": .africa, "ZM": .africa, "ZW": .africa, "IO": .africa,
 
-        "AI": .americas, "AG": .americas, "AR": .americas, "AW": .americas, "BS": .americas,
-        "BB": .americas, "BZ": .americas, "BM": .americas, "BO": .americas, "BQ": .americas,
-        "BR": .americas, "VG": .americas, "CA": .americas, "KY": .americas, "CL": .americas,
-        "CO": .americas, "CR": .americas, "CU": .americas, "CW": .americas, "DM": .americas,
-        "DO": .americas, "EC": .americas, "SV": .americas, "FK": .americas, "GF": .americas,
-        "GL": .americas, "GD": .americas, "GP": .americas, "GT": .americas, "GY": .americas,
-        "HT": .americas, "HN": .americas, "JM": .americas, "MQ": .americas, "MX": .americas,
-        "MS": .americas, "NI": .americas, "PA": .americas, "PY": .americas, "PE": .americas,
-        "PR": .americas, "BL": .americas, "KN": .americas, "LC": .americas, "MF": .americas,
-        "PM": .americas, "VC": .americas, "SX": .americas, "SR": .americas, "TT": .americas,
-        "TC": .americas, "US": .americas, "VI": .americas, "UY": .americas, "VE": .americas,
+        "AI": .northAmerica, "AG": .northAmerica, "AW": .northAmerica, "BS": .northAmerica,
+        "BB": .northAmerica, "BZ": .northAmerica, "BM": .northAmerica, "BQ": .northAmerica,
+        "VG": .northAmerica, "CA": .northAmerica, "KY": .northAmerica, "CR": .northAmerica,
+        "CU": .northAmerica, "CW": .northAmerica, "DM": .northAmerica, "DO": .northAmerica,
+        "SV": .northAmerica, "GL": .northAmerica, "GD": .northAmerica, "GP": .northAmerica,
+        "GT": .northAmerica, "HT": .northAmerica, "HN": .northAmerica, "JM": .northAmerica,
+        "MQ": .northAmerica, "MX": .northAmerica, "MS": .northAmerica, "NI": .northAmerica,
+        "PA": .northAmerica, "PR": .northAmerica, "BL": .northAmerica, "KN": .northAmerica,
+        "LC": .northAmerica, "MF": .northAmerica, "PM": .northAmerica, "VC": .northAmerica,
+        "SX": .northAmerica, "TT": .northAmerica, "TC": .northAmerica, "US": .northAmerica,
+        "VI": .northAmerica,
+
+        "AR": .southAmerica, "BO": .southAmerica, "BR": .southAmerica, "CL": .southAmerica,
+        "CO": .southAmerica, "EC": .southAmerica, "FK": .southAmerica, "GF": .southAmerica,
+        "GY": .southAmerica, "PY": .southAmerica, "PE": .southAmerica, "SR": .southAmerica,
+        "UY": .southAmerica, "VE": .southAmerica,
 
         "AF": .asia, "AM": .asia, "AZ": .asia, "BH": .asia, "BD": .asia, "BT": .asia,
         "BN": .asia, "KH": .asia, "CN": .asia, "CY": .asia, "GE": .asia, "HK": .asia,
