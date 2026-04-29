@@ -72,6 +72,11 @@ struct TripStopEditorCard: View {
     let onDelete: () -> Void
 
     @State private var showingLocationPicker = false
+    @FocusState private var focusedField: Field?
+
+    private enum Field {
+        case journal
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
@@ -87,12 +92,7 @@ struct TripStopEditorCard: View {
             )
             .lineLimit(2...6)
 
-            TextField(
-                "Journal — what do you want to remember?",
-                text: $stop.journal,
-                axis: .vertical
-            )
-            .lineLimit(3...10)
+            journalEditor
 
             if !stop.photos.isEmpty {
                 photoStrip
@@ -170,6 +170,39 @@ struct TripStopEditorCard: View {
             )
         }
         .buttonStyle(.plain)
+    }
+
+    private var journalEditor: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            if focusedField == .journal || !stop.journal.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                Text("Journal")
+                    .font(.caption.weight(.medium))
+                    .foregroundStyle(AppTheme.ColorToken.secondaryInk)
+            }
+
+            ZStack(alignment: .topLeading) {
+                if stop.journal.isEmpty && focusedField != .journal {
+                    Text("Journal — what do you want to remember?")
+                        .foregroundStyle(AppTheme.ColorToken.secondaryInk)
+                        .padding(.horizontal, 5)
+                        .padding(.vertical, 8)
+                }
+
+                TextEditor(text: $stop.journal)
+                    .focused($focusedField, equals: .journal)
+                    .frame(minHeight: 96)
+                    .scrollContentBackground(.hidden)
+                    .background(Color.clear)
+                    .padding(.horizontal, -5)
+                    .padding(.vertical, -8)
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 10)
+            .background(
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .fill(AppTheme.ColorToken.cardFill)
+            )
+        }
     }
 
     private var transportModePicker: some View {
