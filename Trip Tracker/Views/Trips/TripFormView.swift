@@ -204,6 +204,10 @@ struct TripFormView: View {
                 chronologyBanner(message: warning)
             }
 
+            if stops.count > 1 {
+                sortByDateButton
+            }
+
             Button {
                 addStop()
             } label: {
@@ -232,15 +236,6 @@ struct TripFormView: View {
                 Image(systemName: "exclamationmark.triangle.fill")
                     .foregroundStyle(.orange)
             }
-
-            Button {
-                sortByDate()
-            } label: {
-                Label("Sort by date", systemImage: "arrow.up.arrow.down")
-                    .font(.footnote.weight(.semibold))
-            }
-            .buttonStyle(.bordered)
-            .controlSize(.small)
         }
         .padding(12)
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -249,6 +244,20 @@ struct TripFormView: View {
                 .fill(Color.orange.opacity(0.15))
         )
         .listRowInsets(EdgeInsets(top: 4, leading: 0, bottom: 4, trailing: 0))
+        .listRowBackground(Color.clear)
+    }
+
+    private var sortByDateButton: some View {
+        Button {
+            sortByDate()
+        } label: {
+            Label("Sort by date", systemImage: "arrow.up.arrow.down")
+                .font(.footnote.weight(.semibold))
+        }
+        .disabled(stopsAreSortedByDate)
+        .buttonStyle(.bordered)
+        .controlSize(.small)
+        .listRowInsets(EdgeInsets(top: 2, leading: 0, bottom: 6, trailing: 0))
         .listRowBackground(Color.clear)
     }
 
@@ -535,6 +544,10 @@ struct TripFormView: View {
             }
         }
         return nil
+    }
+
+    private var stopsAreSortedByDate: Bool {
+        stops.sorted { $0.date < $1.date }.map(\.id) == stops.map(\.id)
     }
 
     private func save() {
