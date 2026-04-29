@@ -24,7 +24,7 @@ struct RootTabView: View {
                 .tabItem { Label("Map", systemImage: "map") }
                 .tag(RootTab.map)
 
-            TimelineView()
+            TimelineView(selectedTab: $selectedTab)
                 .tabItem { Label("Timeline", systemImage: "clock") }
                 .tag(RootTab.timeline)
 

@@ -2,10 +2,51 @@ import SwiftUI
 import SwiftData
 
 struct TimelineView: View {
+    @Environment(\.modelContext) private var context
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Binding private var selectedTab: RootTab
     @Query(sort: \Trip.startDate, order: .reverse) private var trips: [Trip]
+    @State private var editingTrip: Trip?
+    @State private var showingError = false
+    @State private var errorMessage = ""
 
-    private let spineLeading: CGFloat = 28
-    private let cardLeading: CGFloat = 64
+    private var usesExpandedTextLayout: Bool {
+        switch dynamicTypeSize {
+        case .accessibility1, .accessibility2, .accessibility3, .accessibility4, .accessibility5:
+            return true
+        default:
+            return false
+        }
+    }
+
+    private var spineLeading: CGFloat {
+        usesExpandedTextLayout ? 18 : 28
+    }
+
+    private var cardLeading: CGFloat {
+        usesExpandedTextLayout ? 42 : 64
+    }
+
+    private var timelineTrailingPadding: CGFloat {
+        usesExpandedTextLayout ? 14 : 20
+    }
+
+    private var yearBackdropSize: CGFloat {
+        usesExpandedTextLayout ? 96 : 168
+    }
+
+    private var yearBackdropOpacity: Double {
+        usesExpandedTextLayout ? 0.045 : 0.10
+    }
+
+    private var rowSpacing: CGFloat {
+        usesExpandedTextLayout ? 18 : 24
+    }
+
+    init(selectedTab: Binding<RootTab> = .constant(.timeline)) {
+        _selectedTab = selectedTab
+    }
 
     var body: some View {
         NavigationStack {
@@ -20,6 +61,14 @@ struct TimelineView: View {
             .navigationTitle("Timeline")
             .navigationDestination(for: Trip.self) { trip in
                 TripDetailView(trip: trip)
+            }
+            .sheet(item: $editingTrip) { trip in
+                TripFormView(editing: trip)
+            }
+            .alert("Couldn't update trip", isPresented: $showingError) {
+                Button("OK", role: .cancel) { }
+            } message: {
+                Text(errorMessage)
             }
         }
     }
@@ -37,6 +86,11 @@ struct TimelineView: View {
             }
             .padding(.bottom, 48)
         }
+        .transaction { transaction in
+            if reduceMotion {
+                transaction.animation = nil
+            }
+        }
     }
 
     private func yearBody(for group: YearGroup) -> some View {
@@ -44,17 +98,17 @@ struct TimelineView: View {
             spine(dimmed: group.trips.isEmpty)
 
             Text(String(group.year))
-                .font(.system(size: 168, weight: .bold, design: .rounded))
-                .foregroundStyle(AppTheme.ColorToken.ink.opacity(0.10))
+                .font(.system(size: yearBackdropSize, weight: .bold, design: .rounded))
+                .foregroundStyle(AppTheme.ColorToken.ink.opacity(yearBackdropOpacity))
                 .lineLimit(1)
-                .minimumScaleFactor(0.5)
+                .minimumScaleFactor(0.65)
                 .padding(.leading, cardLeading - 12)
                 .padding(.trailing, 8)
-                .padding(.top, -10)
+                .padding(.top, usesExpandedTextLayout ? 0 : -10)
                 .accessibilityHidden(true)
                 .allowsHitTesting(false)
 
-            VStack(alignment: .leading, spacing: 24) {
+            VStack(alignment: .leading, spacing: rowSpacing) {
                 if group.trips.isEmpty {
                     emptyYearMarker
                 } else {
@@ -64,7 +118,7 @@ struct TimelineView: View {
                 }
             }
             .padding(.leading, cardLeading)
-            .padding(.trailing, 20)
+            .padding(.trailing, timelineTrailingPadding)
             .padding(.top, 8)
             .padding(.bottom, 28)
         }
@@ -96,6 +150,44 @@ struct TimelineView: View {
                 TripTimelineCard(trip: trip)
             }
             .buttonStyle(.plain)
+            .accessibilityHint("Opens trip details. Long-press for favorite, map, and edit actions.")
+            .contextMenu {
+                Button {
+                    toggleFavorite(trip)
+                } label: {
+                    Label(
+                        trip.favorite ? "Remove favorite" : "Favorite",
+                        systemImage: trip.favorite ? "heart.slash" : "heart"
+                    )
+                }
+
+                Button {
+                    selectedTab = .map
+                    Haptics.selection()
+                } label: {
+                    Label("Open Map", systemImage: "map")
+                }
+                .disabled(!trip.hasCoordinates)
+
+                Button {
+                    editingTrip = trip
+                    Haptics.selection()
+                } label: {
+                    Label("Edit Trip", systemImage: "pencil")
+                }
+            }
+        }
+    }
+
+    private func toggleFavorite(_ trip: Trip) {
+        trip.favorite.toggle()
+        if let error = PersistenceReporter.save(context, action: "update favorite") {
+            trip.favorite.toggle()
+            errorMessage = PersistenceReporter.userMessage(for: "update favorite", error: error)
+            showingError = true
+            Haptics.error()
+        } else {
+            Haptics.selection()
         }
     }
 
@@ -111,6 +203,7 @@ struct TimelineView: View {
                 .fill(AppTheme.ColorToken.accent)
                 .frame(width: 6, height: 6)
         }
+        .accessibilityHidden(true)
     }
 
     private var emptyYearMarker: some View {
@@ -124,15 +217,20 @@ struct TimelineView: View {
     }
 
     private func yearHeader(for group: YearGroup) -> some View {
-        HStack(alignment: .center, spacing: 12) {
-            Text(String(group.year))
-                .font(.title2.weight(.semibold))
-                .foregroundStyle(AppTheme.ColorToken.ink)
-            statChip(for: group)
-            Spacer(minLength: 0)
+        ViewThatFits(in: .horizontal) {
+            HStack(alignment: .center, spacing: 12) {
+                yearHeaderTitle(for: group)
+                statChip(for: group)
+                Spacer(minLength: 0)
+            }
+
+            VStack(alignment: .leading, spacing: 6) {
+                yearHeaderTitle(for: group)
+                statChip(for: group)
+            }
         }
         .padding(.leading, cardLeading)
-        .padding(.trailing, 20)
+        .padding(.trailing, timelineTrailingPadding)
         .padding(.vertical, 10)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(
@@ -145,6 +243,20 @@ struct TimelineView: View {
                 .fill(AppTheme.ColorToken.cardBorder.opacity(0.4))
                 .frame(height: 0.5)
         }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(yearAccessibilityLabel(for: group))
+    }
+
+    private func yearHeaderTitle(for group: YearGroup) -> some View {
+        Text(String(group.year))
+            .font(.title2.weight(.semibold))
+            .foregroundStyle(AppTheme.ColorToken.ink)
+            .lineLimit(1)
+            .minimumScaleFactor(0.85)
+    }
+
+    private func yearAccessibilityLabel(for group: YearGroup) -> String {
+        group.trips.isEmpty ? "\(group.year), quiet year" : "\(group.year), \(group.statSummary)"
     }
 
     @ViewBuilder
@@ -153,6 +265,8 @@ struct TimelineView: View {
             Text("Quiet year")
                 .font(.caption.weight(.medium))
                 .foregroundStyle(AppTheme.ColorToken.secondaryInk)
+                .lineLimit(usesExpandedTextLayout ? 2 : 1)
+                .fixedSize(horizontal: false, vertical: true)
                 .padding(.horizontal, 10)
                 .padding(.vertical, 4)
                 .background(Capsule().fill(AppTheme.ColorToken.cardFill))
@@ -161,6 +275,8 @@ struct TimelineView: View {
             Text(group.statSummary)
                 .font(.caption.weight(.medium))
                 .foregroundStyle(AppTheme.ColorToken.accent)
+                .lineLimit(usesExpandedTextLayout ? 2 : 1)
+                .fixedSize(horizontal: false, vertical: true)
                 .padding(.horizontal, 10)
                 .padding(.vertical, 4)
                 .background(Capsule().fill(AppTheme.ColorToken.accentSoft))
