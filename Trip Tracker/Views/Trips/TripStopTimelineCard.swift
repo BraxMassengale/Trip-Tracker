@@ -22,19 +22,12 @@ struct TripStopTimelineCard: View {
                 }
 
                 if !summary.photos.isEmpty {
-                    ScrollView(.horizontal, showsIndicators: false) {
-                        HStack(spacing: 10) {
-                            ForEach(Array(summary.photos.enumerated()), id: \.offset) { _, data in
-                                if let image = UIImage(data: data) {
-                                    Image(uiImage: image)
-                                        .resizable()
-                                        .scaledToFill()
-                                        .frame(width: 120, height: 120)
-                                        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-                                }
-                            }
-                        }
-                    }
+                    HeroPhotoReadOnlyGallery(
+                        photos: summary.photos,
+                        photoIDs: summary.photoIDs,
+                        heroPhotoID: summary.heroPhotoID,
+                        thumbnailSize: CGSize(width: 120, height: 120)
+                    )
                 }
 
                 if summary.hasCoordinates {

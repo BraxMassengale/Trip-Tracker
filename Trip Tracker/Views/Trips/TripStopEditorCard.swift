@@ -11,6 +11,8 @@ struct TripStopDraft: Identifiable, Equatable {
     var journal: String
     var arrivalMode: TransportMode?
     var photos: [Data]
+    var photoIDs: [UUID]
+    var heroPhotoID: UUID?
 
     init(
         id: UUID = UUID(),
@@ -20,7 +22,9 @@ struct TripStopDraft: Identifiable, Equatable {
         notes: String = "",
         journal: String = "",
         arrivalMode: TransportMode? = nil,
-        photos: [Data] = []
+        photos: [Data] = [],
+        photoIDs: [UUID] = [],
+        heroPhotoID: UUID? = nil
     ) {
         self.id = id
         self.existingStopID = existingStopID
@@ -30,6 +34,8 @@ struct TripStopDraft: Identifiable, Equatable {
         self.journal = journal
         self.arrivalMode = arrivalMode
         self.photos = photos
+        self.photoIDs = PhotoSelection.normalizedIDs(for: photos, existingIDs: photoIDs)
+        self.heroPhotoID = PhotoSelection.cleanedHeroPhotoID(heroPhotoID, photoIDs: self.photoIDs)
     }
 
     init(stop: TripStop) {
@@ -49,6 +55,8 @@ struct TripStopDraft: Identifiable, Equatable {
         self.journal = stop.journal ?? ""
         self.arrivalMode = stop.arrivalMode
         self.photos = stop.photos ?? []
+        self.photoIDs = PhotoSelection.normalizedIDs(for: self.photos, existingIDs: stop.photoIDs)
+        self.heroPhotoID = PhotoSelection.cleanedHeroPhotoID(stop.heroPhotoID, photoIDs: self.photoIDs)
     }
 
     var hasMeaningfulContent: Bool {
@@ -95,7 +103,12 @@ struct TripStopEditorCard: View {
             journalEditor
 
             if !stop.photos.isEmpty {
-                photoStrip
+                HeroPhotoGallery(
+                    photos: $stop.photos,
+                    photoIDs: $stop.photoIDs,
+                    heroPhotoID: $stop.heroPhotoID,
+                    thumbnailSize: CGSize(width: 84, height: 84)
+                )
             }
 
             ImagePicker(images: $stop.photos)
@@ -251,31 +264,4 @@ struct TripStopEditorCard: View {
         .accessibilityHint(isSelected ? "Clears the arrival mode" : "Sets the arrival mode")
     }
 
-    private var photoStrip: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 10) {
-                ForEach(Array(stop.photos.enumerated()), id: \.offset) { index, data in
-                    if let image = UIImage(data: data) {
-                        Image(uiImage: image)
-                            .resizable()
-                            .scaledToFill()
-                            .frame(width: 84, height: 84)
-                            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-                            .overlay(alignment: .topTrailing) {
-                                Button {
-                                    stop.photos.remove(at: index)
-                                    Haptics.selection()
-                                } label: {
-                                    Image(systemName: "xmark.circle.fill")
-                                        .symbolRenderingMode(.palette)
-                                        .foregroundStyle(.white, .black.opacity(0.5))
-                                        .font(.title3)
-                                }
-                                .padding(4)
-                            }
-                    }
-                }
-            }
-        }
-    }
 }

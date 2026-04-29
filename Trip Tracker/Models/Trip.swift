@@ -12,6 +12,8 @@ final class Trip {
     var tags: [String] = []
     var companions: [String] = []
     @Attribute(.externalStorage) var photos: [Data]? = nil
+    var photoIDs: [UUID] = []
+    var heroPhotoID: UUID? = nil
     var startLocationName: String = ""
     var startLocationCountry: String = ""
     var startLatitude: Double? = nil
@@ -38,6 +40,8 @@ final class Trip {
         tags: [String] = [],
         companions: [String] = [],
         photos: [Data]? = nil,
+        photoIDs: [UUID] = [],
+        heroPhotoID: UUID? = nil,
         startLocationName: String = "",
         startLocationCountry: String = "",
         startLatitude: Double? = nil,
@@ -62,6 +66,8 @@ final class Trip {
         self.tags = tags
         self.companions = companions
         self.photos = photos
+        self.photoIDs = photoIDs
+        self.heroPhotoID = heroPhotoID
         self.startLocationName = startLocationName
         self.startLocationCountry = startLocationCountry
         self.startLatitude = startLatitude
@@ -103,6 +109,8 @@ extension Trip {
                     journal: stop.journal,
                     arrivalMode: stop.arrivalMode,
                     photos: stop.photos ?? [],
+                    photoIDs: stop.photoIDs,
+                    heroPhotoID: stop.heroPhotoID,
                     latitude: stop.latitude,
                     longitude: stop.longitude,
                     sortOrder: stop.sortOrder,
@@ -124,6 +132,8 @@ extension Trip {
                 journal: nil,
                 arrivalMode: nil,
                 photos: [],
+                photoIDs: [],
+                heroPhotoID: nil,
                 latitude: latitude,
                 longitude: longitude,
                 sortOrder: 0,
@@ -244,10 +254,20 @@ extension Trip {
     }
 
     var previewPhotoData: Data? {
-        if let firstTripPhoto = (photos ?? []).first {
-            return firstTripPhoto
+        if let tripHeroPhotoData {
+            return tripHeroPhotoData
         }
-        return stopSummaries.lazy.compactMap { $0.photos.first }.first
+        return stopSummaries.lazy.compactMap(\.heroPhotoData).first
+    }
+
+    var tripHeroPhotoData: Data? {
+        let currentPhotos = photos ?? []
+        let currentPhotoIDs = PhotoSelection.normalizedIDs(for: currentPhotos, existingIDs: photoIDs)
+        return PhotoSelection.heroPhotoData(
+            photos: currentPhotos,
+            photoIDs: currentPhotoIDs,
+            heroPhotoID: heroPhotoID
+        )
     }
 
     var hasAnyPhotos: Bool {

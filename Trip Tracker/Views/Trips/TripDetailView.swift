@@ -214,19 +214,12 @@ struct TripDetailView: View {
 
     private var tripGalleryCard: some View {
         SectionCard(title: "Trip Photos") {
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 10) {
-                    ForEach(Array((trip.photos ?? []).enumerated()), id: \.offset) { _, data in
-                        if let image = UIImage(data: data) {
-                            Image(uiImage: image)
-                                .resizable()
-                                .scaledToFill()
-                                .frame(width: 140, height: 140)
-                                .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-                        }
-                    }
-                }
-            }
+            HeroPhotoReadOnlyGallery(
+                photos: trip.photos ?? [],
+                photoIDs: trip.photoIDs,
+                heroPhotoID: trip.heroPhotoID,
+                thumbnailSize: CGSize(width: 140, height: 140)
+            )
         }
     }
 

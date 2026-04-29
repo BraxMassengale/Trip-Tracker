@@ -49,6 +49,8 @@ final class TripStop {
     var journal: String? = nil
     var arrivalMode: TransportMode? = nil
     @Attribute(.externalStorage) var photos: [Data]? = nil
+    var photoIDs: [UUID] = []
+    var heroPhotoID: UUID? = nil
     var latitude: Double? = nil
     var longitude: Double? = nil
     var sortOrder: Int = 0
@@ -62,6 +64,8 @@ final class TripStop {
         journal: String? = nil,
         arrivalMode: TransportMode? = nil,
         photos: [Data]? = nil,
+        photoIDs: [UUID] = [],
+        heroPhotoID: UUID? = nil,
         latitude: Double? = nil,
         longitude: Double? = nil,
         sortOrder: Int = 0
@@ -73,6 +77,8 @@ final class TripStop {
         self.journal = journal
         self.arrivalMode = arrivalMode
         self.photos = photos
+        self.photoIDs = photoIDs
+        self.heroPhotoID = heroPhotoID
         self.latitude = latitude
         self.longitude = longitude
         self.sortOrder = sortOrder
@@ -89,6 +95,8 @@ struct TripStopSummary: Identifiable {
     let journal: String?
     let arrivalMode: TransportMode?
     let photos: [Data]
+    let photoIDs: [UUID]
+    let heroPhotoID: UUID?
     let latitude: Double?
     let longitude: Double?
     let sortOrder: Int
@@ -96,6 +104,15 @@ struct TripStopSummary: Identifiable {
 
     var hasCoordinates: Bool {
         latitude != nil && longitude != nil
+    }
+
+    var heroPhotoData: Data? {
+        let normalizedIDs = PhotoSelection.normalizedIDs(for: photos, existingIDs: photoIDs)
+        return PhotoSelection.heroPhotoData(
+            photos: photos,
+            photoIDs: normalizedIDs,
+            heroPhotoID: heroPhotoID
+        )
     }
 
     var locationLabel: String {

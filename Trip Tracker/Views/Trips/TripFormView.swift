@@ -20,6 +20,8 @@ struct TripFormView: View {
     @State private var favorite: Bool
     @State private var rating: Int?
     @State private var tripPhotos: [Data]
+    @State private var tripPhotoIDs: [UUID]
+    @State private var tripHeroPhotoID: UUID?
     @State private var startLocation: TripLocation?
     @State private var endLocation: TripLocation?
     @State private var returnsToStart: Bool
@@ -43,6 +45,8 @@ struct TripFormView: View {
         _favorite = State(initialValue: false)
         _rating = State(initialValue: nil)
         _tripPhotos = State(initialValue: [])
+        _tripPhotoIDs = State(initialValue: [])
+        _tripHeroPhotoID = State(initialValue: nil)
         _startLocation = State(initialValue: nil)
         _endLocation = State(initialValue: nil)
         _returnsToStart = State(initialValue: false)
@@ -61,6 +65,14 @@ struct TripFormView: View {
         _favorite = State(initialValue: trip.favorite)
         _rating = State(initialValue: trip.rating)
         _tripPhotos = State(initialValue: trip.photos ?? [])
+        _tripPhotoIDs = State(initialValue: PhotoSelection.normalizedIDs(
+            for: trip.photos ?? [],
+            existingIDs: trip.photoIDs
+        ))
+        _tripHeroPhotoID = State(initialValue: PhotoSelection.cleanedHeroPhotoID(
+            trip.heroPhotoID,
+            photoIDs: PhotoSelection.normalizedIDs(for: trip.photos ?? [], existingIDs: trip.photoIDs)
+        ))
         _startLocation = State(initialValue: trip.startLocation)
         _endLocation = State(initialValue: trip.endLocation)
         _returnsToStart = State(initialValue: trip.returnsToStart)
@@ -381,31 +393,12 @@ struct TripFormView: View {
     private var tripPhotosSection: some View {
         Section("Trip Photos") {
             if !tripPhotos.isEmpty {
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 10) {
-                        ForEach(Array(tripPhotos.enumerated()), id: \.offset) { index, data in
-                            if let image = UIImage(data: data) {
-                                Image(uiImage: image)
-                                    .resizable()
-                                    .scaledToFill()
-                                    .frame(width: 84, height: 84)
-                                    .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-                                    .overlay(alignment: .topTrailing) {
-                                        Button {
-                                            tripPhotos.remove(at: index)
-                                            Haptics.selection()
-                                        } label: {
-                                            Image(systemName: "xmark.circle.fill")
-                                                .symbolRenderingMode(.palette)
-                                                .foregroundStyle(.white, .black.opacity(0.5))
-                                                .font(.title3)
-                                        }
-                                        .padding(4)
-                                    }
-                            }
-                        }
-                    }
-                }
+                HeroPhotoGallery(
+                    photos: $tripPhotos,
+                    photoIDs: $tripPhotoIDs,
+                    heroPhotoID: $tripHeroPhotoID,
+                    thumbnailSize: CGSize(width: 84, height: 84)
+                )
                 .listRowInsets(EdgeInsets(top: 8, leading: 16, bottom: 8, trailing: 16))
             }
             ImagePicker(images: $tripPhotos)
@@ -583,6 +576,8 @@ struct TripFormView: View {
         trip.tags = tags
         trip.companions = companions
         trip.photos = tripPhotos.isEmpty ? nil : tripPhotos
+        trip.photoIDs = PhotoSelection.normalizedIDs(for: tripPhotos, existingIDs: tripPhotoIDs)
+        trip.heroPhotoID = PhotoSelection.cleanedHeroPhotoID(tripHeroPhotoID, photoIDs: trip.photoIDs)
         trip.setStartLocation(startLocation)
         trip.returnsToStart = returnsToStart && startLocation != nil
         trip.setEndLocation(trip.returnsToStart ? startLocation : endLocation)
@@ -632,6 +627,8 @@ struct TripFormView: View {
                 stop.journal = trimmedJournal.isEmpty ? nil : trimmedJournal
                 stop.arrivalMode = draft.arrivalMode
                 stop.photos = draft.photos.isEmpty ? nil : draft.photos
+                stop.photoIDs = PhotoSelection.normalizedIDs(for: draft.photos, existingIDs: draft.photoIDs)
+                stop.heroPhotoID = PhotoSelection.cleanedHeroPhotoID(draft.heroPhotoID, photoIDs: stop.photoIDs)
                 stop.latitude = location.latitude
                 stop.longitude = location.longitude
                 stop.sortOrder = index
@@ -646,6 +643,11 @@ struct TripFormView: View {
                     journal: trimmedJournal.isEmpty ? nil : trimmedJournal,
                     arrivalMode: draft.arrivalMode,
                     photos: draft.photos.isEmpty ? nil : draft.photos,
+                    photoIDs: PhotoSelection.normalizedIDs(for: draft.photos, existingIDs: draft.photoIDs),
+                    heroPhotoID: PhotoSelection.cleanedHeroPhotoID(
+                        draft.heroPhotoID,
+                        photoIDs: PhotoSelection.normalizedIDs(for: draft.photos, existingIDs: draft.photoIDs)
+                    ),
                     latitude: location.latitude,
                     longitude: location.longitude,
                     sortOrder: index
