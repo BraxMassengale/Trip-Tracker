@@ -35,6 +35,12 @@ struct TripStopTimelineCard: View {
                         .font(.footnote.weight(.medium))
                         .foregroundStyle(AppTheme.ColorToken.accent)
                 }
+
+                if let stop = summary.stop {
+                    AttachmentsSection(attachments: stop.attachments, embedded: true) { attachment in
+                        attachment.stop = stop
+                    }
+                }
             }
         }
     }

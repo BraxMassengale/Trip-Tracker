@@ -19,6 +19,9 @@ struct TripDetailView: View {
             VStack(spacing: 16) {
                 heroPhoto
                 headerCard
+                AttachmentsSection(attachments: trip.attachments) { attachment in
+                    attachment.trip = trip
+                }
                 if !trip.tags.isEmpty {
                     tagsCard
                 }

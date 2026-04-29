@@ -54,6 +54,7 @@ final class TripStop {
     var latitude: Double? = nil
     var longitude: Double? = nil
     var sortOrder: Int = 0
+    @Relationship(deleteRule: .cascade, inverse: \Attachment.stop) var attachments: [Attachment] = []
     var trip: Trip? = nil
 
     init(
@@ -68,7 +69,8 @@ final class TripStop {
         heroPhotoID: UUID? = nil,
         latitude: Double? = nil,
         longitude: Double? = nil,
-        sortOrder: Int = 0
+        sortOrder: Int = 0,
+        attachments: [Attachment] = []
     ) {
         self.destinationName = destinationName
         self.country = country
@@ -82,6 +84,7 @@ final class TripStop {
         self.latitude = latitude
         self.longitude = longitude
         self.sortOrder = sortOrder
+        self.attachments = attachments
     }
 }
 
@@ -101,6 +104,7 @@ struct TripStopSummary: Identifiable {
     let longitude: Double?
     let sortOrder: Int
     let isLegacy: Bool
+    let stop: TripStop?
 
     var hasCoordinates: Bool {
         latitude != nil && longitude != nil

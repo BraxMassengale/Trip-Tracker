@@ -49,6 +49,7 @@ struct RootTabView: View {
     let container = try! ModelContainer(
         for: Trip.self,
         TripStop.self,
+        Attachment.self,
         configurations: ModelConfiguration(isStoredInMemoryOnly: true)
     )
 

@@ -28,6 +28,7 @@ final class Trip {
     var rating: Int? = nil
     var favorite: Bool = false
     var createdAt: Date = Date()
+    @Relationship(deleteRule: .cascade, inverse: \Attachment.trip) var attachments: [Attachment] = []
     @Relationship(deleteRule: .cascade, inverse: \TripStop.trip) var stops: [TripStop] = []
 
     init(
@@ -55,6 +56,7 @@ final class Trip {
         longitude: Double? = nil,
         rating: Int? = nil,
         favorite: Bool = false,
+        attachments: [Attachment] = [],
         stops: [TripStop] = []
     ) {
         self.title = title
@@ -82,6 +84,7 @@ final class Trip {
         self.rating = rating
         self.favorite = favorite
         self.createdAt = Date()
+        self.attachments = attachments
         self.stops = stops
     }
 }
@@ -114,7 +117,8 @@ extension Trip {
                     latitude: stop.latitude,
                     longitude: stop.longitude,
                     sortOrder: stop.sortOrder,
-                    isLegacy: false
+                    isLegacy: false,
+                    stop: stop
                 )
             }
         }
@@ -137,7 +141,8 @@ extension Trip {
                 latitude: latitude,
                 longitude: longitude,
                 sortOrder: 0,
-                isLegacy: true
+                isLegacy: true,
+                stop: nil
             )
         ]
     }

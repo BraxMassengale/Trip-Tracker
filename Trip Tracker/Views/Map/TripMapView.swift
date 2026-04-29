@@ -829,6 +829,7 @@ private struct Triangle: Shape {
     let container = try! ModelContainer(
         for: Trip.self,
         TripStop.self,
+        Attachment.self,
         configurations: ModelConfiguration(isStoredInMemoryOnly: true)
     )
 
@@ -864,6 +865,7 @@ private struct Triangle: Shape {
     let container = try! ModelContainer(
         for: Trip.self,
         TripStop.self,
+        Attachment.self,
         configurations: ModelConfiguration(isStoredInMemoryOnly: true)
     )
 
