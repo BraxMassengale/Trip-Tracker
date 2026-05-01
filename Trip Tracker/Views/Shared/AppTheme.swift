@@ -54,6 +54,8 @@ enum AppTheme {
             UIColor(red: 0.22, green: 0.24, blue: 0.26, alpha: 1)
         )
 
+        static let warning = Color(UIColor.systemOrange)
+
         static let routeBlue = dynamic(
             UIColor(red: 0.20, green: 0.42, blue: 0.86, alpha: 1),
             UIColor(red: 0.43, green: 0.63, blue: 0.95, alpha: 1)

@@ -67,14 +67,16 @@ struct StatsView: View {
             VStack(alignment: .leading, spacing: 8) {
                 if countries.isEmpty {
                     Text("No countries logged yet")
-                        .font(.system(size: 28, weight: .bold, design: .rounded))
+                        .font(.title.weight(.bold))
+                        .fontDesign(.rounded)
                         .foregroundStyle(AppTheme.ColorToken.ink)
                     Text("Add a stop with a country and your passport starts filling out.")
                         .font(.subheadline)
                         .foregroundStyle(AppTheme.ColorToken.secondaryInk)
                 } else {
                     Text(heroNumberLine(countries: countries.count, continents: continents.count))
-                        .font(.system(size: 30, weight: .bold, design: .rounded))
+                        .font(.title.weight(.bold))
+                        .fontDesign(.rounded)
                         .foregroundStyle(AppTheme.ColorToken.ink)
                         .fixedSize(horizontal: false, vertical: true)
 
@@ -123,7 +125,7 @@ struct StatsView: View {
                 if countries.isEmpty {
                     HStack(spacing: 10) {
                         Image(systemName: "globe")
-                            .font(.system(size: 28, weight: .light))
+                            .font(.title.weight(.light))
                             .foregroundStyle(AppTheme.ColorToken.secondaryInk)
                         Text("No country stamps yet — add country names on your stops to start.")
                             .font(.subheadline)
@@ -162,7 +164,7 @@ struct StatsView: View {
             if breakdown.isEmpty {
                 HStack(spacing: 10) {
                     Image(systemName: "globe.europe.africa")
-                        .font(.system(size: 26, weight: .light))
+                        .font(.title2.weight(.light))
                         .foregroundStyle(AppTheme.ColorToken.secondaryInk)
                     Text("No continent data yet.")
                         .font(.subheadline)
@@ -208,7 +210,7 @@ struct StatsView: View {
             if cities.isEmpty {
                 HStack(spacing: 10) {
                     Image(systemName: "mappin.and.ellipse")
-                        .font(.system(size: 26, weight: .light))
+                        .font(.title2.weight(.light))
                         .foregroundStyle(AppTheme.ColorToken.secondaryInk)
                     Text("Add stops to start ranking your most-visited places.")
                         .font(.subheadline)
@@ -267,7 +269,7 @@ struct StatsView: View {
                 VStack(alignment: .leading, spacing: 12) {
                     HStack(spacing: 10) {
                         Image(systemName: "chart.bar")
-                            .font(.system(size: 28, weight: .light))
+                            .font(.title.weight(.light))
                             .foregroundStyle(AppTheme.ColorToken.secondaryInk)
                         VStack(alignment: .leading, spacing: 2) {
                             Text("0 trips")
@@ -317,7 +319,7 @@ struct StatsView: View {
             if companionFrequencies.isEmpty {
                 HStack(spacing: 10) {
                     Image(systemName: "person.2")
-                        .font(.system(size: 28, weight: .light))
+                        .font(.title.weight(.light))
                         .foregroundStyle(AppTheme.ColorToken.secondaryInk)
                     VStack(alignment: .leading, spacing: 2) {
                         Text("No companions yet")
@@ -598,7 +600,7 @@ private struct PassportStampTile: View {
         Button(action: action) {
             VStack(spacing: 6) {
                 Text(country.flag ?? "🏳️")
-                    .font(.system(size: 36))
+                    .font(.largeTitle)
                 Text(country.displayName)
                     .font(.caption.weight(.medium))
                     .foregroundStyle(AppTheme.ColorToken.ink)
@@ -651,7 +653,8 @@ private struct StatTile: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             Text(value)
-                .font(.system(size: 28, weight: .bold, design: .rounded))
+                .font(.title.weight(.bold))
+                .fontDesign(.rounded)
                 .foregroundStyle(AppTheme.ColorToken.ink)
             Text(label)
                 .font(.footnote.weight(.medium))

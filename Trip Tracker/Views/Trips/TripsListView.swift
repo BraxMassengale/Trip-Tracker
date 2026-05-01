@@ -24,6 +24,7 @@ struct TripsListView: View {
                         } label: {
                             Image(systemName: "plus")
                         }
+                        .accessibilityLabel("Add trip")
                     }
                 }
                 .searchable(text: $vm.searchQuery, prompt: "Search trips")
@@ -134,6 +135,7 @@ struct TripsListView: View {
         } label: {
             Image(systemName: "arrow.up.arrow.down.circle")
         }
+        .accessibilityLabel("Sort trips")
     }
 
     private var emptyState: some View {
@@ -144,7 +146,7 @@ struct TripsListView: View {
             ) {
                 VStack(alignment: .leading, spacing: 16) {
                     Image(systemName: "suitcase")
-                        .font(.system(size: 34, weight: .light))
+                        .font(.largeTitle.weight(.light))
                         .foregroundStyle(AppTheme.ColorToken.secondaryInk)
 
                     Text("Keep places, dates, notes, and photos together in one calm timeline.")
@@ -176,7 +178,7 @@ struct TripsListView: View {
     private var noMatches: some View {
         VStack(spacing: 12) {
             Image(systemName: "magnifyingglass")
-                .font(.system(size: 32, weight: .light))
+                .font(.title.weight(.light))
                 .foregroundStyle(AppTheme.ColorToken.secondaryInk)
             Text("No trips match your filters")
                 .font(.subheadline)
@@ -236,6 +238,7 @@ private struct FilterChip: View {
                 if showsClear {
                     Image(systemName: "xmark.circle.fill")
                         .font(.footnote)
+                        .accessibilityHidden(true)
                 }
             }
             .foregroundStyle(isSelected
@@ -250,5 +253,7 @@ private struct FilterChip: View {
             )
         }
         .buttonStyle(.plain)
+        .frame(minHeight: 44)
+        .contentShape(Rectangle())
     }
 }

@@ -116,7 +116,7 @@ struct TripStopEditorCard: View {
             if stop.isIncomplete {
                 Text("Add a location to keep this stop.")
                     .font(.footnote.weight(.medium))
-                    .foregroundStyle(.orange)
+                    .foregroundStyle(AppTheme.ColorToken.warning)
             }
         }
         .padding(14)
@@ -147,8 +147,10 @@ struct TripStopEditorCard: View {
             if canDelete {
                 Button(role: .destructive, action: onDelete) {
                     Image(systemName: "trash")
+                        .frame(width: 44, height: 44)
                 }
                 .buttonStyle(.plain)
+                .accessibilityLabel("Delete stop")
             }
         }
     }
@@ -243,7 +245,7 @@ struct TripStopEditorCard: View {
         } label: {
             Image(systemName: mode.symbolName)
                 .font(.headline)
-                .frame(width: 42, height: 38)
+                .frame(width: 44, height: 44)
                 .foregroundStyle(isSelected
                     ? AppTheme.ColorToken.cardFill
                     : AppTheme.ColorToken.ink)

@@ -142,7 +142,7 @@ struct TripFormView: View {
                 .textInputAutocapitalization(.words)
             DatePicker("Start", selection: $startDate, displayedComponents: .date)
 
-            Toggle("Has end date", isOn: $hasEndDate.animation())
+            Toggle("Has end date", isOn: $hasEndDate)
             if hasEndDate {
                 DatePicker(
                     "End",
@@ -246,14 +246,14 @@ struct TripFormView: View {
                     .foregroundStyle(AppTheme.ColorToken.ink)
             } icon: {
                 Image(systemName: "exclamationmark.triangle.fill")
-                    .foregroundStyle(.orange)
+                    .foregroundStyle(AppTheme.ColorToken.warning)
             }
         }
         .padding(12)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(
             RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .fill(Color.orange.opacity(0.15))
+                .fill(AppTheme.ColorToken.warning.opacity(0.15))
         )
         .listRowInsets(EdgeInsets(top: 4, leading: 0, bottom: 4, trailing: 0))
         .listRowBackground(Color.clear)
@@ -716,7 +716,7 @@ private struct TripEndpointLocationRow: View {
                         .foregroundStyle(location == nil
                             ? AppTheme.ColorToken.secondaryInk
                             : AppTheme.ColorToken.ink)
-                        .lineLimit(1)
+                        .lineLimit(2)
                 }
 
                 Spacer()

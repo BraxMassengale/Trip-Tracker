@@ -69,6 +69,7 @@ struct TripDetailView: View {
                 } label: {
                     Image(systemName: "ellipsis.circle")
                 }
+                .accessibilityLabel("Trip options")
             }
         }
         .sheet(isPresented: $showingEdit) {

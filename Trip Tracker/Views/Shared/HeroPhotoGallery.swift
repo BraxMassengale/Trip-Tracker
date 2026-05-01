@@ -52,8 +52,9 @@ struct HeroPhotoGallery: View {
                         .symbolRenderingMode(.palette)
                         .foregroundStyle(.white, .black.opacity(0.5))
                         .font(.title3)
+                        .frame(width: 44, height: 44)
+                        .contentShape(Rectangle())
                 }
-                .padding(4)
                 .accessibilityLabel("Delete photo")
             }
             .contextMenu {

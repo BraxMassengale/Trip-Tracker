@@ -47,6 +47,7 @@ struct LocationPickerSheet: View {
         HStack(spacing: 8) {
             Image(systemName: "magnifyingglass")
                 .foregroundStyle(AppTheme.ColorToken.secondaryInk)
+                .accessibilityHidden(true)
             TextField("Search a city or place", text: $query)
                 .textInputAutocapitalization(.words)
                 .autocorrectionDisabled()
@@ -60,7 +61,10 @@ struct LocationPickerSheet: View {
                 } label: {
                     Image(systemName: "xmark.circle.fill")
                         .foregroundStyle(AppTheme.ColorToken.secondaryInk)
+                        .frame(width: 44, height: 44)
+                        .contentShape(Rectangle())
                 }
+                .accessibilityLabel("Clear search")
             }
         }
         .padding(.horizontal)
@@ -130,7 +134,7 @@ struct LocationPickerSheet: View {
     private func emptyMessage(_ text: String) -> some View {
         VStack(spacing: 12) {
             Image(systemName: "mappin.and.ellipse")
-                .font(.system(size: 36, weight: .light))
+                .font(.largeTitle.weight(.light))
                 .foregroundStyle(AppTheme.ColorToken.secondaryInk)
             Text(text)
                 .font(.subheadline)

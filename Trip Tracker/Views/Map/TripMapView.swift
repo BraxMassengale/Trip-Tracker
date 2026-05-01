@@ -5,6 +5,7 @@ import UIKit
 
 struct TripMapView: View {
     @Environment(\.openURL) private var openURL
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Query(sort: \Trip.startDate, order: .reverse) private var trips: [Trip]
 
     @State private var position: MapCameraPosition = .automatic
@@ -235,7 +236,7 @@ struct TripMapView: View {
             ) {
                 VStack(alignment: .leading, spacing: 14) {
                     Image(systemName: "map")
-                        .font(.system(size: 34, weight: .light))
+                        .font(.largeTitle.weight(.light))
                         .foregroundStyle(AppTheme.ColorToken.secondaryInk)
 
                     Text("Your travel map will start filling in as soon as you save trips with journey locations.")
@@ -341,7 +342,7 @@ struct TripMapView: View {
             .padding(.horizontal)
             .padding(.top, 12)
             .padding(.bottom, 6)
-            .animation(.snappy(duration: 0.24), value: selectedPlaceSheetExpanded)
+            .animation(reduceMotion ? nil : .snappy(duration: 0.24), value: selectedPlaceSheetExpanded)
             .accessibilityElement(children: .contain)
             .accessibilityLabel("\(selectedPlace.title), \(selectedPlace.summary)")
         } else {
@@ -358,7 +359,7 @@ struct TripMapView: View {
                     Text("\(mapPlacesLabel) · tap markers to preview trips")
                         .font(.caption)
                         .foregroundStyle(AppTheme.ColorToken.secondaryInk)
-                        .lineLimit(1)
+                        .lineLimit(2)
                 }
 
                 Spacer(minLength: 0)
@@ -481,7 +482,7 @@ struct TripMapView: View {
                 Text("Adjust filters to show more mapped trips")
                     .font(.caption)
                     .foregroundStyle(AppTheme.ColorToken.secondaryInk)
-                    .lineLimit(1)
+                    .lineLimit(2)
             }
 
             Spacer(minLength: 0)
@@ -586,7 +587,7 @@ struct TripMapView: View {
                 Text("Showing \(routeSegments.count) of \(filteredRouteSegments.count) routes")
                     .font(.caption.weight(.medium))
                     .foregroundStyle(AppTheme.ColorToken.ink)
-                    .lineLimit(1)
+                    .lineLimit(2)
 
                 Spacer(minLength: 0)
 
@@ -1219,6 +1220,8 @@ private struct TripMapPageIndicator: View {
     let count: Int
     let selectedIndex: Int
 
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
     var body: some View {
         HStack(spacing: 6) {
             ForEach(0..<count, id: \.self) { index in
@@ -1230,7 +1233,7 @@ private struct TripMapPageIndicator: View {
             }
         }
         .frame(maxWidth: .infinity)
-        .animation(.spring(response: 0.24, dampingFraction: 0.85), value: selectedIndex)
+        .animation(reduceMotion ? nil : .spring(response: 0.24, dampingFraction: 0.85), value: selectedIndex)
         .accessibilityLabel("Trip \(selectedIndex + 1) of \(count)")
     }
 }
@@ -1242,6 +1245,8 @@ private struct TripMapPlacePin: View {
     let isFavorite: Bool
     let kind: TripJourneyLocationKind
     let isCluster: Bool
+
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         VStack(spacing: 0) {
@@ -1260,7 +1265,8 @@ private struct TripMapPlacePin: View {
 
                 if count > 1 {
                     Text("\(min(count, 99))")
-                        .font(.system(size: 10, weight: .bold, design: .rounded))
+                        .font(.caption2.weight(.bold))
+                        .fontDesign(.rounded)
                         .foregroundStyle(.white)
                         .padding(.horizontal, 5)
                         .padding(.vertical, 2)
@@ -1281,8 +1287,8 @@ private struct TripMapPlacePin: View {
         .opacity(isDimmed ? 0.32 : 1)
         .shadow(color: Color.black.opacity(isSelected ? 0.18 : 0.10), radius: 10, x: 0, y: 4)
         .scaleEffect(isSelected ? 1.08 : 1.0)
-        .animation(.spring(response: 0.22, dampingFraction: 0.8), value: isSelected)
-        .animation(.easeInOut(duration: 0.18), value: isDimmed)
+        .animation(reduceMotion ? nil : .spring(response: 0.22, dampingFraction: 0.8), value: isSelected)
+        .animation(reduceMotion ? nil : .easeInOut(duration: 0.18), value: isDimmed)
     }
 
     private var symbolName: String {

@@ -149,7 +149,7 @@ struct AttachmentsSection: View {
                     Text(attachment.title)
                         .font(.subheadline.weight(.semibold))
                         .foregroundStyle(AppTheme.ColorToken.ink)
-                        .lineLimit(1)
+                        .lineLimit(2)
 
                     Text(attachment.sortedSubtitle)
                         .font(.footnote)
