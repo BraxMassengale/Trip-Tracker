@@ -12,7 +12,6 @@ struct TripMapView: View {
     @State private var selectedPlaceID: String?
     @State private var selectedCarouselTripID: String?
     @State private var selectedPlaceSheetExpanded = false
-    @State private var focusRoutesOnSelectedPlace = false
     @State private var tripFilter: TripMapTripFilter = .all
     @State private var routeModeFilter: Set<TransportMode> = []
     @State private var visibleRegion: MKCoordinateRegion?
@@ -72,11 +71,6 @@ struct TripMapView: View {
     private var mapContent: some View {
         Map(position: $position) {
             ForEach(routeSegments) { segment in
-                if segment.isFlight {
-                    MapPolyline(segment.polyline)
-                        .stroke(segment.color.opacity(segment.dimmed ? 0.05 : 0.20), lineWidth: segment.glowLineWidth)
-                }
-
                 MapPolyline(segment.polyline)
                     .stroke(
                         segment.color.opacity(segment.routeOpacity),
@@ -183,10 +177,6 @@ struct TripMapView: View {
             .filter { segment in
                 routeModeFilter.isEmpty || segment.mode.map { routeModeFilter.contains($0) } == true
             }
-            .filter { segment in
-                guard focusRoutesOnSelectedPlace, let selectedPlaceID else { return true }
-                return segment.touchesPlace(selectedPlaceID)
-            }
     }
 
     private var hiddenRouteSegmentCount: Int {
@@ -254,12 +244,7 @@ struct TripMapView: View {
         if mapLocations.isEmpty {
             noFilteredResultsCard
         } else if let selectedPlace {
-            VStack(spacing: selectedPlaceSheetExpanded ? 14 : 12) {
-                Capsule()
-                    .fill(AppTheme.ColorToken.muted.opacity(0.55))
-                    .frame(width: 38, height: 5)
-                    .padding(.top, 8)
-
+            VStack(spacing: 12) {
                 HStack(alignment: .center, spacing: 12) {
                     VStack(alignment: .leading, spacing: 4) {
                         Text(selectedPlace.title)
@@ -274,6 +259,20 @@ struct TripMapView: View {
 
                     Spacer()
 
+                    if selectedPlace.trips.count > 1 {
+                        Button {
+                            selectedPlaceSheetExpanded.toggle()
+                            Haptics.selection()
+                        } label: {
+                            Image(systemName: selectedPlaceSheetExpanded ? "chevron.down.circle" : "chevron.up.circle")
+                                .font(.title3)
+                                .symbolRenderingMode(.hierarchical)
+                                .foregroundStyle(AppTheme.ColorToken.secondaryInk)
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel(selectedPlaceSheetExpanded ? "Collapse place details" : "Expand place details")
+                    }
+
                     Button {
                         clearSelection()
                     } label: {
@@ -286,9 +285,28 @@ struct TripMapView: View {
                     .accessibilityLabel("Close selected place")
                 }
                 .padding(.horizontal, 16)
+                .padding(.top, 14)
 
-                selectedPlaceActions(for: selectedPlace)
-                    .padding(.horizontal, 16)
+                HStack(spacing: 8) {
+                    if let trip = selectedTrip(in: selectedPlace) {
+                        NavigationLink(value: trip) {
+                            MapControlLabel(title: "Open trip", symbolName: "arrow.up.right", isActive: true)
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel("Open selected trip")
+                    }
+
+                    Button {
+                        openInMaps(selectedPlace)
+                    } label: {
+                        MapControlLabel(title: "Maps", symbolName: "map", isActive: false)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Open in Apple Maps")
+
+                    Spacer(minLength: 0)
+                }
+                .padding(.horizontal, 16)
 
                 if selectedPlaceSheetExpanded {
                     TabView(selection: $selectedCarouselTripID) {
@@ -378,55 +396,6 @@ struct TripMapView: View {
         }
     }
 
-    private func selectedPlaceActions(for place: TripMapPlace) -> some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 8) {
-                if let selectedTrip = selectedTrip(in: place) {
-                    NavigationLink(value: selectedTrip) {
-                        MapControlLabel(title: "Open trip", symbolName: "arrow.up.right", isActive: true)
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel("Open selected trip")
-                }
-
-                Button {
-                    openInMaps(place)
-                } label: {
-                    MapControlLabel(title: "Maps", symbolName: "map", isActive: false)
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel("Open selected place in Apple Maps")
-
-                Button {
-                    focusRoutesOnSelectedPlace.toggle()
-                    Haptics.selection()
-                } label: {
-                    MapControlLabel(
-                        title: focusRoutesOnSelectedPlace ? "All routes" : "Only routes",
-                        symbolName: "point.topleft.down.curvedto.point.bottomright.up",
-                        isActive: focusRoutesOnSelectedPlace
-                    )
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel(focusRoutesOnSelectedPlace ? "Show all routes" : "Show only routes touching this place")
-
-                Button {
-                    selectedPlaceSheetExpanded.toggle()
-                    Haptics.selection()
-                } label: {
-                    MapControlLabel(
-                        title: selectedPlaceSheetExpanded ? "Compact" : "Details",
-                        symbolName: selectedPlaceSheetExpanded ? "chevron.down" : "chevron.up",
-                        isActive: false
-                    )
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel(selectedPlaceSheetExpanded ? "Collapse selected place" : "Expand selected place")
-            }
-        }
-        .accessibilityElement(children: .contain)
-    }
-
     private func selectedTripPreview(for place: TripMapPlace) -> some View {
         let trip = selectedTrip(in: place) ?? place.trips.first
         return HStack(spacing: 10) {
@@ -507,36 +476,8 @@ struct TripMapView: View {
     }
 
     private var topChrome: some View {
-        VStack(spacing: 8) {
-            mapSummaryBar
-            mapControlBar
-            routeDensityNotice
-        }
-        .padding(.horizontal)
-    }
-
-    private var mapSummaryBar: some View {
-        HStack(spacing: 10) {
-            MapSummaryMetric(value: "\(mapPlaces.count)", label: "Places")
-
-            Divider()
-                .frame(height: 20)
-
-            MapSummaryMetric(value: "\(tripsWithMappedLocationsCount)", label: "Trips")
-
-            Divider()
-                .frame(height: 20)
-
-            MapSummaryMetric(value: routeSummaryValue, label: "Routes")
-        }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 7)
-        .background(.regularMaterial, in: Capsule())
-        .overlay(
-            Capsule()
-                .stroke(AppTheme.ColorToken.cardBorder.opacity(0.65), lineWidth: 1)
-        )
-        .padding(.top, 0)
+        mapControlBar
+            .padding(.horizontal)
     }
 
     private var mapControlBar: some View {
@@ -553,15 +494,6 @@ struct TripMapView: View {
                 routeModeMenu
                 routeDensityMenu
 
-                if selectedPlaceID != nil {
-                    MapControlButton(
-                        title: "Clear",
-                        symbolName: "xmark.circle",
-                        isActive: true,
-                        action: clearSelection
-                    )
-                }
-
                 if tripFilter != .all || !routeModeFilter.isEmpty {
                     MapControlButton(
                         title: "Reset",
@@ -574,43 +506,6 @@ struct TripMapView: View {
             .padding(.horizontal, 1)
         }
         .accessibilityElement(children: .contain)
-    }
-
-    @ViewBuilder
-    private var routeDensityNotice: some View {
-        if hiddenRouteSegmentCount > 0 {
-            HStack(spacing: 8) {
-                Image(systemName: "line.3.horizontal.decrease.circle")
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(AppTheme.ColorToken.accent)
-
-                Text("Showing \(routeSegments.count) of \(filteredRouteSegments.count) routes")
-                    .font(.caption.weight(.medium))
-                    .foregroundStyle(AppTheme.ColorToken.ink)
-                    .lineLimit(2)
-
-                Spacer(minLength: 0)
-
-                Button {
-                    routeDensity = .all
-                    Haptics.selection()
-                } label: {
-                    Text("Show all")
-                        .font(.caption.weight(.semibold))
-                        .foregroundStyle(AppTheme.ColorToken.accent)
-                }
-                .buttonStyle(.plain)
-            }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 8)
-            .background(.regularMaterial, in: Capsule())
-            .overlay(
-                Capsule()
-                    .stroke(AppTheme.ColorToken.cardBorder.opacity(0.65), lineWidth: 1)
-            )
-            .accessibilityElement(children: .combine)
-            .accessibilityLabel("Showing \(routeSegments.count) of \(filteredRouteSegments.count) routes. Show all routes.")
-        }
     }
 
     private var tripFilterMenu: some View {
@@ -690,17 +585,6 @@ struct TripMapView: View {
         return "\(routeModeFilter.count) modes"
     }
 
-    private var tripsWithMappedLocationsCount: Int {
-        Set(mapLocations.map { tripID(for: $0.trip) }).count
-    }
-
-    private var routeSummaryValue: String {
-        guard hiddenRouteSegmentCount > 0 else {
-            return "\(routeSegments.count)"
-        }
-        return "\(routeSegments.count)+"
-    }
-
     private var mapPlacesLabel: String {
         mapPlaces.count == 1
             ? "1 destination marker"
@@ -711,7 +595,6 @@ struct TripMapView: View {
         selectedPlaceID = place.id
         selectedCarouselTripID = place.trips.first.map { tripID(for: $0) }
         selectedPlaceSheetExpanded = false
-        focusRoutesOnSelectedPlace = false
         position = .region(region(focusingOn: place))
         Haptics.selection()
     }
@@ -720,7 +603,6 @@ struct TripMapView: View {
         selectedPlaceID = nil
         selectedCarouselTripID = nil
         selectedPlaceSheetExpanded = false
-        focusRoutesOnSelectedPlace = false
         refreshCameraPosition(force: true)
         Haptics.selection()
     }
@@ -729,7 +611,6 @@ struct TripMapView: View {
         selectedPlaceID = nil
         selectedCarouselTripID = nil
         selectedPlaceSheetExpanded = false
-        focusRoutesOnSelectedPlace = false
         refreshCameraPosition(force: true)
         Haptics.selection()
     }
@@ -740,7 +621,6 @@ struct TripMapView: View {
         selectedPlaceID = nil
         selectedCarouselTripID = nil
         selectedPlaceSheetExpanded = false
-        focusRoutesOnSelectedPlace = false
         Haptics.selection()
     }
 
@@ -759,7 +639,6 @@ struct TripMapView: View {
             self.selectedPlaceID = nil
             selectedCarouselTripID = nil
             selectedPlaceSheetExpanded = false
-            focusRoutesOnSelectedPlace = false
             return
         }
     }
@@ -936,10 +815,6 @@ private struct TripRouteSegment: Identifiable {
         return highlighted ? 0.98 : 0.62
     }
 
-    var glowLineWidth: CGFloat {
-        highlighted ? 12 : 7
-    }
-
     var strokeStyle: StrokeStyle {
         let width: CGFloat = highlighted ? 5.5 : 3.2
 
@@ -1045,24 +920,6 @@ private struct TripMapPlace: Identifiable {
         }
 
         return result
-    }
-}
-
-private struct MapSummaryMetric: View {
-    let value: String
-    let label: String
-
-    var body: some View {
-        VStack(spacing: 1) {
-            Text(value)
-                .font(.footnote.weight(.semibold))
-                .foregroundStyle(AppTheme.ColorToken.ink)
-                .monospacedDigit()
-            Text(label)
-                .font(.caption2.weight(.medium))
-                .foregroundStyle(AppTheme.ColorToken.secondaryInk)
-        }
-        .frame(minWidth: 44)
     }
 }
 
