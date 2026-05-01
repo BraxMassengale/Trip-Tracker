@@ -17,10 +17,18 @@ struct TripMapView: View {
     @State private var visibleRegion: MKCoordinateRegion?
     @State private var routeDensity: TripMapRouteDensity = .balanced
 
+    // Cached derived data — only rebuilt when inputs change, not on every body eval
+    @State private var cachedMapPlaces: [TripMapPlace] = []
+    @State private var cachedSegments: [TripRouteSegment] = []
+    @State private var cachedGroupingID: String = ""
+    @State private var hasAnyLocations: Bool = false
+    @State private var hasFilteredLocations: Bool = false
+    @State private var cachedFittedRegion: MKCoordinateRegion?
+
     var body: some View {
         NavigationStack {
             Group {
-                if allMapLocations.isEmpty {
+                if !hasAnyLocations {
                     emptyState
                 } else {
                     mapContent
@@ -31,19 +39,19 @@ struct TripMapView: View {
                 TripDetailView(trip: trip)
             }
             .onAppear {
+                rebuildData()
                 refreshCameraPosition()
-                pruneSelection()
             }
             .onChange(of: coordinateSnapshot) { _, _ in
+                rebuildData()
                 refreshCameraPosition()
-                pruneSelection()
             }
             .onChange(of: filterSnapshot) { _, _ in
+                rebuildData()
                 refreshCameraPosition(force: true)
-                pruneSelection()
             }
-            .onChange(of: placeGrouping.id) { _, _ in
-                pruneSelection()
+            .onChange(of: visibleRegionID) { _, _ in
+                rebuildPlaces()
             }
             .onChange(of: selectedCarouselTripID) { _, _ in
                 Haptics.selection()
@@ -53,15 +61,17 @@ struct TripMapView: View {
 
     private var selectedPlace: TripMapPlace? {
         guard let selectedPlaceID else { return nil }
-        return mapPlaces.first { $0.id == selectedPlaceID }
+        return cachedMapPlaces.first { $0.id == selectedPlaceID }
     }
 
+    // Cheap: just trip + location counts — O(n trips) not O(all coordinates)
     private var coordinateSnapshot: String {
-        allMapLocations
-            .map { location in
-                "\(location.id)-\(location.location.latitude)-\(location.location.longitude)"
-            }
-            .joined(separator: "|")
+        "\(trips.count)|\(trips.prefix(30).map { "\($0.mapJourneyLocations.count)" }.joined(separator: ","))"
+    }
+
+    private var visibleRegionID: String {
+        guard let r = visibleRegion else { return "" }
+        return "\(Int(r.center.latitude * 100))-\(Int(r.center.longitude * 100))-\(Int(r.span.latitudeDelta * 100))"
     }
 
     private var filterSnapshot: String {
@@ -70,15 +80,15 @@ struct TripMapView: View {
 
     private var mapContent: some View {
         Map(position: $position) {
-            ForEach(routeSegments) { segment in
+            ForEach(displayedSegments) { segment in
                 MapPolyline(segment.polyline)
                     .stroke(
-                        segment.color.opacity(segment.routeOpacity),
+                        segment.color.opacity(segment.opacity(selectedPlaceID: selectedPlaceID)),
                         style: segment.strokeStyle
                     )
             }
 
-            ForEach(mapPlaces) { place in
+            ForEach(cachedMapPlaces) { place in
                 Annotation(place.title, coordinate: place.coordinate) {
                     Button {
                         select(place)
@@ -110,110 +120,106 @@ struct TripMapView: View {
         }
     }
 
-    private var allMapLocations: [TripJourneyLocation] {
-        trips
-            .flatMap(\.mapJourneyLocations)
-            .sorted { $0.date > $1.date }
-    }
-
-    private var mapLocations: [TripJourneyLocation] {
-        filteredTrips
-            .flatMap(\.mapJourneyLocations)
-            .sorted { $0.date > $1.date }
-    }
-
     private var filteredTrips: [Trip] {
         let mappedTrips = trips.filter { !$0.mapJourneyLocations.isEmpty }
-
         switch tripFilter {
-        case .all:
-            return mappedTrips
-        case .favorites:
-            return mappedTrips.filter(\.favorite)
-        case .recent:
-            return Array(mappedTrips.prefix(5))
+        case .all: return mappedTrips
+        case .favorites: return mappedTrips.filter(\.favorite)
+        case .recent: return Array(mappedTrips.prefix(5))
         }
     }
 
-    private var mapPlaces: [TripMapPlace] {
-        let groupedLocations = Dictionary(grouping: mapLocations) { location in
-            placeKey(for: location)
+    // Density-limited view into cachedSegments — cheap to compute each render
+    private var displayedSegments: [TripRouteSegment] {
+        guard routeDensity.hasLimit, cachedSegments.count > routeDensity.segmentLimit else {
+            return cachedSegments
         }
+        if let selectedPlaceID {
+            let touching = cachedSegments.filter { $0.touchesPlace(selectedPlaceID) }
+            let other = cachedSegments.filter { !$0.touchesPlace(selectedPlaceID) }
+            return Array((touching + other).prefix(routeDensity.segmentLimit))
+        }
+        return Array(cachedSegments.prefix(routeDensity.segmentLimit))
+    }
 
-        return groupedLocations.map { key, locations in
-            TripMapPlace(
-                id: key,
-                locations: locations,
-                tripID: { trip in tripID(for: trip) }
-            )
+    private var hiddenSegmentCount: Int {
+        max(cachedSegments.count - displayedSegments.count, 0)
+    }
+
+    // MARK: - Cache rebuild
+
+    private func rebuildData() {
+        let allLocs = trips.flatMap(\.mapJourneyLocations)
+        hasAnyLocations = !allLocs.isEmpty
+
+        let ft = filteredTrips
+        let filteredLocs = ft.flatMap(\.mapJourneyLocations).sorted { $0.date > $1.date }
+        hasFilteredLocations = !filteredLocs.isEmpty
+
+        let locationsForCamera = filteredLocs.isEmpty
+            ? allLocs.sorted { $0.date > $1.date }
+            : filteredLocs
+        cachedFittedRegion = fittedRegion(for: locationsForCamera)
+
+        let grouping = TripMapPlaceGrouping(
+            visibleRegion: visibleRegion,
+            fallbackRegion: cachedFittedRegion,
+            locationCount: filteredLocs.count
+        )
+        cachedGroupingID = grouping.id
+        cachedMapPlaces = buildPlaces(from: filteredLocs, grouping: grouping)
+        cachedSegments = buildSegments(from: ft, grouping: grouping)
+        pruneSelection()
+    }
+
+    private func rebuildPlaces() {
+        let ft = filteredTrips
+        let filteredLocs = ft.flatMap(\.mapJourneyLocations).sorted { $0.date > $1.date }
+        let grouping = TripMapPlaceGrouping(
+            visibleRegion: visibleRegion,
+            fallbackRegion: cachedFittedRegion,
+            locationCount: filteredLocs.count
+        )
+        guard grouping.id != cachedGroupingID else { return }
+        cachedGroupingID = grouping.id
+        cachedMapPlaces = buildPlaces(from: filteredLocs, grouping: grouping)
+        cachedSegments = buildSegments(from: ft, grouping: grouping)
+        pruneSelection()
+    }
+
+    private func buildPlaces(from locations: [TripJourneyLocation], grouping: TripMapPlaceGrouping) -> [TripMapPlace] {
+        let grouped = Dictionary(grouping: locations) { placeKey(for: $0, grouping: grouping) }
+        return grouped.map { key, locs in
+            TripMapPlace(id: key, locations: locs, tripID: { self.tripID(for: $0) })
         }
         .sorted { first, second in
-            if first.lastVisited == second.lastVisited {
-                return first.title < second.title
-            }
-            return first.lastVisited > second.lastVisited
+            first.lastVisited != second.lastVisited
+                ? first.lastVisited > second.lastVisited
+                : first.title < second.title
         }
     }
 
-    private var routeSegments: [TripRouteSegment] {
-        let segments = filteredRouteSegments
-
-        guard routeDensity.hasLimit, segments.count > routeDensity.segmentLimit else {
-            return segments
-        }
-
-        let highlighted = segments.filter(\.highlighted)
-        let standard = segments.filter { !$0.highlighted }
-        let selectedFirst = highlighted + standard
-        return Array(selectedFirst.prefix(routeDensity.segmentLimit))
-    }
-
-    private var filteredRouteSegments: [TripRouteSegment] {
-        filteredTrips
-            .enumerated()
-            .flatMap { tripIndex, trip in
-                routeSegments(for: trip, tripIndex: tripIndex)
-            }
-            .filter { segment in
-                routeModeFilter.isEmpty || segment.mode.map { routeModeFilter.contains($0) } == true
+    private func buildSegments(from trips: [Trip], grouping: TripMapPlaceGrouping) -> [TripRouteSegment] {
+        trips.enumerated()
+            .flatMap { index, trip in buildTripSegments(for: trip, tripIndex: index, grouping: grouping) }
+            .filter { seg in
+                routeModeFilter.isEmpty || seg.mode.map { routeModeFilter.contains($0) } == true
             }
     }
 
-    private var hiddenRouteSegmentCount: Int {
-        max(filteredRouteSegments.count - routeSegments.count, 0)
-    }
-
-    private var placeGrouping: TripMapPlaceGrouping {
-        TripMapPlaceGrouping(
-            visibleRegion: visibleRegion,
-            fallbackRegion: fittedRegion(for: mapLocations.isEmpty ? allMapLocations : mapLocations),
-            locationCount: mapLocations.count
-        )
-    }
-
-    private func routeSegments(for trip: Trip, tripIndex: Int) -> [TripRouteSegment] {
+    private func buildTripSegments(for trip: Trip, tripIndex: Int, grouping: TripMapPlaceGrouping) -> [TripRouteSegment] {
         let locations = trip.mapJourneyLocations
         guard locations.count > 1 else { return [] }
-
         let color = routeColor(for: trip, fallbackIndex: tripIndex)
-
         return zip(locations, locations.dropFirst()).map { start, end in
-            let startPlaceID = placeKey(for: start)
-            let endPlaceID = placeKey(for: end)
-            let touchesSelection = selectedPlaceID.map { selectedID in
-                startPlaceID == selectedID || endPlaceID == selectedID
-            } ?? false
-
-            return TripRouteSegment(
+            TripRouteSegment(
                 id: "\(start.id)-to-\(end.id)",
                 start: start.location.coordinate,
                 end: end.location.coordinate,
-                startPlaceID: startPlaceID,
-                endPlaceID: endPlaceID,
+                startPlaceID: placeKey(for: start, grouping: grouping),
+                endPlaceID: placeKey(for: end, grouping: grouping),
                 mode: end.arrivalMode,
-                color: color,
-                dimmed: selectedPlaceID != nil && !touchesSelection,
-                highlighted: touchesSelection
+                color: color
             )
         }
     }
@@ -241,7 +247,7 @@ struct TripMapView: View {
 
     @ViewBuilder
     private var bottomCard: some View {
-        if mapLocations.isEmpty {
+        if !hasFilteredLocations {
             noFilteredResultsCard
         } else if let selectedPlace {
             VStack(spacing: 12) {
@@ -566,11 +572,11 @@ struct TripMapView: View {
             MapControlLabel(
                 title: routeDensity.label,
                 symbolName: routeDensity.symbolName,
-                isActive: routeDensity != .balanced || hiddenRouteSegmentCount > 0
+                isActive: routeDensity != .balanced || hiddenSegmentCount > 0
             )
         }
         .accessibilityLabel("Route density")
-        .accessibilityValue(routeDensity.accessibilityValue(hiddenCount: hiddenRouteSegmentCount))
+        .accessibilityValue(routeDensity.accessibilityValue(hiddenCount: hiddenSegmentCount))
     }
 
     private var routeModeTitle: String {
@@ -586,9 +592,9 @@ struct TripMapView: View {
     }
 
     private var mapPlacesLabel: String {
-        mapPlaces.count == 1
+        cachedMapPlaces.count == 1
             ? "1 destination marker"
-            : "\(mapPlaces.count) destination markers"
+            : "\(cachedMapPlaces.count) destination markers"
     }
 
     private func select(_ place: TripMapPlace) {
@@ -635,7 +641,7 @@ struct TripMapView: View {
 
     private func pruneSelection() {
         guard let selectedPlaceID else { return }
-        guard mapPlaces.contains(where: { $0.id == selectedPlaceID }) else {
+        guard cachedMapPlaces.contains(where: { $0.id == selectedPlaceID }) else {
             self.selectedPlaceID = nil
             selectedCarouselTripID = nil
             selectedPlaceSheetExpanded = false
@@ -645,15 +651,11 @@ struct TripMapView: View {
 
     private func refreshCameraPosition(force: Bool = false) {
         guard force || selectedPlace == nil else { return }
-        position = initialCameraPosition
-    }
-
-    private var initialCameraPosition: MapCameraPosition {
-        let locations = mapLocations.isEmpty ? allMapLocations : mapLocations
-        guard let region = fittedRegion(for: locations) else {
-            return .automatic
+        if let region = cachedFittedRegion {
+            position = .region(region)
+        } else {
+            position = .automatic
         }
-        return .region(region)
     }
 
     private func fittedRegion(for locations: [TripJourneyLocation]) -> MKCoordinateRegion? {
@@ -742,14 +744,13 @@ struct TripMapView: View {
         String(describing: trip.persistentModelID)
     }
 
-    private func placeKey(for location: TripJourneyLocation) -> String {
+    private func placeKey(for location: TripJourneyLocation, grouping: TripMapPlaceGrouping) -> String {
         let label = location.location.locationLabel
             .trimmingCharacters(in: .whitespacesAndNewlines)
             .lowercased()
-        let roundedLatitude = placeGrouping.bucket(location.location.latitude)
-        let roundedLongitude = placeGrouping.bucket(location.location.longitude)
-
-        if label.isEmpty || !placeGrouping.usesLabels {
+        let roundedLatitude = grouping.bucket(location.location.latitude)
+        let roundedLongitude = grouping.bucket(location.location.longitude)
+        if label.isEmpty || !grouping.usesLabels {
             return "\(roundedLatitude),\(roundedLongitude)"
         }
         return "\(label)|\(roundedLatitude),\(roundedLongitude)"
@@ -792,45 +793,35 @@ private struct TripRouteSegment: Identifiable {
     let endPlaceID: String
     let mode: TransportMode?
     let color: Color
-    let dimmed: Bool
-    let highlighted: Bool
 
     var polyline: MKGeodesicPolyline {
         var coordinates = [start, end]
         return MKGeodesicPolyline(coordinates: &coordinates, count: coordinates.count)
     }
 
-    var isFlight: Bool {
-        mode == .flight
-    }
-
     func touchesPlace(_ placeID: String) -> Bool {
         startPlaceID == placeID || endPlaceID == placeID
     }
 
-    var routeOpacity: Double {
-        if dimmed {
-            return 0.12
-        }
-        return highlighted ? 0.98 : 0.62
+    func opacity(selectedPlaceID: String?) -> Double {
+        guard let selectedPlaceID else { return 0.62 }
+        return touchesPlace(selectedPlaceID) ? 0.98 : 0.12
     }
 
     var strokeStyle: StrokeStyle {
-        let width: CGFloat = highlighted ? 5.5 : 3.2
-
         switch mode {
         case .flight:
-            return StrokeStyle(lineWidth: width, lineCap: .round, lineJoin: .round, dash: [9, 7])
+            return StrokeStyle(lineWidth: 3.2, lineCap: .round, lineJoin: .round, dash: [9, 7])
         case .train:
-            return StrokeStyle(lineWidth: width, lineCap: .round, lineJoin: .round, dash: [12, 4, 2, 4])
+            return StrokeStyle(lineWidth: 3.2, lineCap: .round, lineJoin: .round, dash: [12, 4, 2, 4])
         case .car, .bus:
-            return StrokeStyle(lineWidth: width, lineCap: .round, lineJoin: .round)
+            return StrokeStyle(lineWidth: 3.2, lineCap: .round, lineJoin: .round)
         case .ferry:
-            return StrokeStyle(lineWidth: width, lineCap: .round, lineJoin: .round, dash: [2, 7])
+            return StrokeStyle(lineWidth: 3.2, lineCap: .round, lineJoin: .round, dash: [2, 7])
         case .walk, .bike:
-            return StrokeStyle(lineWidth: highlighted ? 4 : 2.5, lineCap: .round, lineJoin: .round, dash: [1, 6])
+            return StrokeStyle(lineWidth: 2.5, lineCap: .round, lineJoin: .round, dash: [1, 6])
         case .other, nil:
-            return StrokeStyle(lineWidth: highlighted ? 4 : 2.5, lineCap: .round, lineJoin: .round, dash: [6, 6])
+            return StrokeStyle(lineWidth: 2.5, lineCap: .round, lineJoin: .round, dash: [6, 6])
         }
     }
 }
